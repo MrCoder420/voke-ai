@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGroqVoice } from '@/hooks/useGroqVoice';
-import { AudioVisualizer } from '@/components/AudioVisualizer';
+import { AudioVisualizerSimple } from '@/components/AudioVisualizerSimple';
 import { LiveStatus, MessageLog } from '@/types/voice';
 import { Mic, X, MessageSquare, Sparkles, AlertCircle, ArrowLeft, Code, Play, Send, Maximize2, Minimize2, FileText, LogOut } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -338,7 +338,7 @@ const VoiceAssistant: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
-                                <AudioVisualizer
+                                <AudioVisualizerSimple
                                     isUserSpeaking={isUserSpeaking}
                                     isAiSpeaking={isAiSpeaking}
                                     volume={volume}

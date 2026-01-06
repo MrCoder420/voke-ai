@@ -55,6 +55,15 @@ const AdminDashboard = () => {
   });
   const [users, setUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredUsers = users.filter(user => {
+    const searchLower = searchQuery.toLowerCase();
+    const nameMatch = (user.full_name || "").toLowerCase().includes(searchLower);
+    const emailMatch = (user.email || "").toLowerCase().includes(searchLower);
+    const dateMatch = new Date(user.created_at).toLocaleDateString().toLowerCase().includes(searchLower);
+    return nameMatch || emailMatch || dateMatch;
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -210,13 +219,7 @@ const AdminDashboard = () => {
     { name: 'Sun', users: 3490, sessions: 4300 },
   ];
 
-  const mockUsers = [
-    { id: 1, name: "Alice Johnson", email: "alice@example.com", status: "Active", role: "User", joined: "2024-01-15" },
-    { id: 2, name: "Bob Smith", email: "bob@example.com", status: "Inactive", role: "User", joined: "2024-02-20" },
-    { id: 3, name: "Charlie Brown", email: "charlie@example.com", status: "Active", role: "Moderator", joined: "2023-11-05" },
-    { id: 4, name: "Diana Prince", email: "diana@example.com", status: "Banned", role: "User", joined: "2024-03-10" },
-    { id: 5, name: "Evan Wright", email: "evan@example.com", status: "Active", role: "User", joined: "2024-01-25" },
-  ];
+
 
   if (checking) {
     return (
@@ -348,7 +351,9 @@ const AdminDashboard = () => {
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
               <Input 
-                placeholder="Search anything..." 
+                placeholder="Search by name, email or date..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 bg-white/5 border-white/10 text-sm w-64 rounded-full focus:bg-white/10 transition-all"
               />
             </div>
@@ -495,7 +500,16 @@ const AdminDashboard = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {mockUsers.map((user) => (
+                        {isLoadingUsers ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8 text-gray-400">Loading...</TableCell>
+                          </TableRow>
+                        ) : users.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8 text-gray-400">No recent registrations</TableCell>
+                          </TableRow>
+                        ) : (
+                          users.slice(0, 5).map((user) => (
                           <TableRow 
                             key={user.id} 
                             className="border-white/10 hover:bg-white/5 cursor-pointer transition-colors"
@@ -504,10 +518,10 @@ const AdminDashboard = () => {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-8 w-8 border border-white/10">
-                                  <AvatarFallback className="bg-violet-500/20 text-violet-300">{user.name[0]}</AvatarFallback>
+                                  <AvatarFallback className="bg-violet-500/20 text-violet-300">{(user.full_name || "U")[0]}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <p className="font-medium text-gray-200">{user.name}</p>
+                                  <p className="font-medium text-gray-200">{user.full_name || "Unknown User"}</p>
                                   <p className="text-xs text-gray-500">{user.email}</p>
                                 </div>
                               </div>
@@ -515,27 +529,21 @@ const AdminDashboard = () => {
                             <TableCell>
                               <Badge 
                                 variant="outline" 
-                                className={`border-0 ${
-                                  user.status === 'Active' ? 'bg-green-500/10 text-green-400' : 
-                                  user.status === 'Inactive' ? 'bg-yellow-500/10 text-yellow-400' : 
-                                  'bg-red-500/10 text-red-400'
-                                }`}
+                                className="bg-green-500/10 text-green-400 border-0"
                               >
-                                {user.status === 'Active' && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                                {user.status === 'Inactive' && <Clock className="w-3 h-3 mr-1" />}
-                                {user.status === 'Banned' && <XCircle className="w-3 h-3 mr-1" />}
-                                {user.status}
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Active
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-gray-400">{user.role}</TableCell>
-                            <TableCell className="text-gray-400">{user.joined}</TableCell>
+                            <TableCell className="text-gray-400">User</TableCell>
+                            <TableCell className="text-gray-400">{new Date(user.created_at).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/10">
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </TableCell>
                           </TableRow>
-                        ))}
+                        )))}
                       </TableBody>
                     </Table>
                   </CardContent>
@@ -556,6 +564,9 @@ const AdminDashboard = () => {
                     <CardTitle className="flex items-center gap-2">
                       <Users className="w-5 h-5 text-blue-400" />
                       User Management
+                      <span className="ml-2 px-2.5 py-0.5 rounded-full bg-white/10 text-xs text-gray-400 font-normal">
+                        {users.length}
+                      </span>
                     </CardTitle>
                     <Button variant="outline" size="sm" onClick={fetchUsers} className="border-white/10 hover:bg-white/5">
                       Refresh List
@@ -580,14 +591,14 @@ const AdminDashboard = () => {
                                 Loading users...
                               </TableCell>
                             </TableRow>
-                          ) : users.length === 0 ? (
+                          ) : filteredUsers.length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={5} className="text-center py-8 text-gray-400">
-                                No users found
+                                {searchQuery ? "No matching users found" : "No users found"}
                               </TableCell>
                             </TableRow>
                           ) : (
-                            users.map((user) => (
+                            filteredUsers.map((user) => (
                               <TableRow 
                                 key={user.id} 
                                 className="border-white/10 hover:bg-white/5 cursor-pointer transition-colors"

@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { ADMIN_EMAIL } from "@/config/admin";
 
 const AdminUserDetails = () => {
   const { userId } = useParams();
@@ -65,13 +66,7 @@ const AdminUserDetails = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-            
-        if (profile && profile.role === 'admin') {
+        if (user.email === ADMIN_EMAIL) {
             setIsAdmin(true);
         }
     } catch (error) {

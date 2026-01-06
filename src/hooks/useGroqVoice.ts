@@ -1,22 +1,7 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Groq from 'groq-sdk';
 import { LiveStatus, MessageLog } from '../types/voice';
 import { toast } from 'sonner';
-
-// Initialize Groq client safely
-const getGroqClient = () => {
-    const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-    if (!apiKey) {
-        console.warn("VITE_GROQ_API_KEY is missing. Voice features will be disabled.");
-        return null;
-    }
-    return new Groq({
-        apiKey: apiKey,
-        dangerouslyAllowBrowser: true
-    });
-};
-
-const groq = getGroqClient();
 
 const SYSTEM_INSTRUCTION = `YOU ARE:
 A real-time voice-based conversational assistant designed to conduct a professional yet friendly interview.
@@ -72,8 +57,25 @@ interface UseGroqVoiceReturn {
     sendHiddenContext: (text: string) => Promise<void>;
 }
 
-export function useGroqVoice(): UseGroqVoiceReturn {
+interface UseGroqVoiceProps {
+    apiKey?: string;
+}
+
+export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
     const [status, setStatus] = useState<LiveStatus>(LiveStatus.DISCONNECTED);
+    const [groqClient, setGroqClient] = useState<Groq | null>(null);
+
+    useEffect(() => {
+        const apiKey = props?.apiKey || import.meta.env.VITE_GROQ_API_KEY;
+        if (apiKey) {
+            setGroqClient(new Groq({
+                apiKey: apiKey,
+                dangerouslyAllowBrowser: true
+            }));
+        } else {
+            console.warn("Groq API Key missing. Voice unavailable.");
+        }
+    }, [props?.apiKey]);
     const [errorDetails, setErrorDetails] = useState<string | null>(null);
     const [isUserSpeaking, setIsUserSpeaking] = useState(false);
     const [isAiSpeaking, setIsAiSpeaking] = useState(false);
@@ -101,7 +103,7 @@ export function useGroqVoice(): UseGroqVoiceReturn {
 
     // Helper to send messages to Groq
     const sendToGroq = async (fullMessages: any[]) => {
-        if (!groq) {
+        if (!groqClient) {
             const errorText = "I cannot process your request because my API key is missing.";
             speakResponse(errorText);
             return;
@@ -109,7 +111,7 @@ export function useGroqVoice(): UseGroqVoiceReturn {
 
         let completion;
         try {
-            completion = await groq.chat.completions.create({
+            completion = await groqClient.chat.completions.create({
                 messages: fullMessages,
                 model: 'llama-3.3-70b-versatile',
                 temperature: 0.7,
@@ -123,7 +125,7 @@ export function useGroqVoice(): UseGroqVoiceReturn {
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
                 try {
-                    completion = await groq.chat.completions.create({
+                    completion = await groqClient.chat.completions.create({
                         messages: fullMessages,
                         model: 'llama-3.1-8b-instant',
                         temperature: 0.7,
@@ -136,7 +138,7 @@ export function useGroqVoice(): UseGroqVoiceReturn {
                         // toast.warning("Optimizing connection (2/2)...");
                         await new Promise(resolve => setTimeout(resolve, 2000));
 
-                        completion = await groq.chat.completions.create({
+                        completion = await groqClient.chat.completions.create({
                             messages: fullMessages,
                             model: 'mixtral-8x7b-32768',
                             temperature: 0.7,
@@ -270,13 +272,13 @@ export function useGroqVoice(): UseGroqVoiceReturn {
             // Convert blob to File
             const audioFile = new File([audioBlob], 'audio.webm', { type: 'audio/webm' });
 
-            if (!groq) {
+            if (!groqClient) {
                 console.error('DEBUG: Groq client not initialized (missing API key)');
                 toast.error("Voice Error: Groq API Key missing");
                 return '';
             }
 
-            const transcription = await groq.audio.transcriptions.create({
+            const transcription = await groqClient.audio.transcriptions.create({
                 file: audioFile,
                 model: 'whisper-large-v3-turbo', // Reverting to turbo as distil is decommissioned
                 temperature: 0,
@@ -567,13 +569,13 @@ export function useGroqVoice(): UseGroqVoiceReturn {
             // Generate personalized greeting using Groq
             try {
                 console.log('DEBUG: Generating personalized greeting...');
-                if (!groq) {
+                if (!groqClient) {
                     throw new Error("Groq client not initialized");
                 }
 
                 let greetingCompletion;
                 try {
-                    greetingCompletion = await groq.chat.completions.create({
+                    greetingCompletion = await groqClient.chat.completions.create({
                         messages: [
                             {
                                 role: 'system',
@@ -591,7 +593,7 @@ export function useGroqVoice(): UseGroqVoiceReturn {
                 } catch (error: any) {
                     if (error?.status === 429) {
                         console.log('DEBUG: Rate limit reached during greeting, switching to fallback...');
-                        greetingCompletion = await groq.chat.completions.create({
+                        greetingCompletion = await groqClient.chat.completions.create({
                             messages: [
                                 {
                                     role: 'system',
@@ -637,7 +639,7 @@ export function useGroqVoice(): UseGroqVoiceReturn {
             setErrorDetails("Failed to access microphone. Please allow microphone access.");
             setStatus(LiveStatus.ERROR);
         }
-    }, [status]);
+    }, [status, groqClient]);
 
     const disconnect = useCallback(() => {
         console.log('DEBUG: Disconnect called');

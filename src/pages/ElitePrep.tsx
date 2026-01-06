@@ -16,6 +16,7 @@ import { loadUserProfileContext, ProfileContext } from "@/utils/profileContext";
 
 const ElitePrep: React.FC = () => {
     const navigate = useNavigate();
+    
     const {
         status,
         connect,

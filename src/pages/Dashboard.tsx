@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   FileText, LogOut, TrendingUp, Upload, Play, Target, Users, Mic, Settings,
   Flame, Trophy, Clock, Star, ArrowRight, Zap, Code, MessageSquare, Bell, Search,
-  Globe, BookOpen, Briefcase, FileQuestion, ChevronRight
+  Globe, BookOpen, Briefcase, FileQuestion, ChevronRight, Sparkles
 } from "lucide-react";
 import { SkillRadar } from "@/components/dashboard/SkillRadar";
 import { RoadToOffer } from "@/components/dashboard/RoadToOffer";
@@ -466,7 +466,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
-                  {realStats.map((stat, i) => (
+                  {realStats.slice(0, 3).map((stat, i) => (
                     <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/5 hover:bg-white/20 transition-colors">
                       <div className="flex items-center gap-2 mb-2 text-white/70">
                         <stat.icon className="w-4 h-4" />
@@ -475,6 +475,22 @@ const Dashboard = () => {
                       <p className="text-2xl font-bold">{stat.value}</p>
                     </div>
                   ))}
+                  
+                  {/* AI Resume Button */}
+                  <div 
+                    onClick={() => navigate("/resume-builder")}
+                    className="relative bg-gradient-to-br from-amber-500/20 to-orange-600/20 backdrop-blur-sm rounded-xl p-4 border border-amber-500/30 hover:bg-amber-500/30 transition-all cursor-pointer group hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center text-center"
+                  >
+                    <div className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg shadow-lg flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-white fill-white" />
+                      <span>New</span>
+                    </div>
+                    
+                    <FileText className="w-8 h-8 text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
+                    <p className="text-sm font-bold text-white leading-tight">
+                      Generate Resume
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -537,7 +553,7 @@ const Dashboard = () => {
                       <Zap className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                     </div>
                     <h4 className="font-semibold text-sm">Elite Prep</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Premium Coaching</p>
+                    <p className="text-xs text-muted-foreground mt-1">Premium Interview Prep</p>
                   </CardContent>
                 </Card>
 

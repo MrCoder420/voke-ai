@@ -44,6 +44,7 @@ import Playground from "./pages/Playground";
 import Pricing from "./pages/Pricing";
 import ElitePrep from "./pages/ElitePrep";
 import CareerPlanView from "./pages/CareerPlanView";
+import ResumeBuilder from "./pages/ResumeBuilder";
 import NotFound from "./pages/NotFound";
 import { Footer } from "./components/Footer";
 import GlobalAIChatbot from "./components/GlobalAIChatbot";
@@ -103,6 +104,7 @@ const App = () => (
               <Route path="/playground" element={<Playground />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/elite-prep" element={<ElitePrep />} />
+              <Route path="/resume-builder" element={<ResumeBuilder />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

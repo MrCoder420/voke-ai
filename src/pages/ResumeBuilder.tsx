@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ interface Education {
 
 interface Leadership {
   id: string;
+  type: 'Leadership' | 'Hackathon' | 'Certificate';
   role: string;
   organization: string;
   duration: string;
@@ -218,7 +220,7 @@ const ResumeBuilder = () => {
   const addLeadership = () => {
     setData(prev => ({
       ...prev,
-      leadership: [...prev.leadership, { id: Date.now().toString(), role: "", organization: "", duration: "", description: "" }]
+      leadership: [...prev.leadership, { id: Date.now().toString(), type: 'Leadership', role: "", organization: "", duration: "", description: "" }]
     }));
   };
 
@@ -680,16 +682,54 @@ const ResumeBuilder = () => {
                           </Button>
                         </div>
                         <CardContent className="pt-6 space-y-4">
-                          <div className="grid grid-cols-2 gap-5">
+                          <div className="space-y-4">
                             <div className="space-y-2">
-                              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Role</Label>
-                              <Input placeholder="e.g. Club President" value={item.role} onChange={(e) => updateLeadership(item.id, 'role', e.target.value)} className="bg-white/5 border-white/10 focus:border-amber-500/50 text-white h-9" />
+                              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Activity Type</Label>
+                              <Select value={item.type} onValueChange={(value: any) => updateLeadership(item.id, 'type', value)}>
+                                <SelectTrigger className="bg-white/5 border-white/10 text-white h-9">
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                  <SelectItem value="Leadership">Leadership / Volunteering</SelectItem>
+                                  <SelectItem value="Hackathon">Hackathon</SelectItem>
+                                  <SelectItem value="Certificate">Certificate</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Organization</Label>
-                              <Input placeholder="e.g. Coding Club" value={item.organization} onChange={(e) => updateLeadership(item.id, 'organization', e.target.value)} className="bg-white/5 border-white/10 focus:border-amber-500/50 text-white h-9" />
+                            <div className="grid grid-cols-2 gap-5">
+                              <div className="space-y-2">
+                                <Label className="text-zinc-400 text-xs uppercase tracking-wider">
+                                  {item.type === 'Hackathon' ? 'Project / Achievement' :
+                                    item.type === 'Certificate' ? 'Certificate Name' : 'Role'}
+                                </Label>
+                                <Input
+                                  placeholder={
+                                    item.type === 'Hackathon' ? "e.g. Won 1st Place" :
+                                      item.type === 'Certificate' ? "e.g. AWS Certified Solutions Architect" : "e.g. Club President"
+                                  }
+                                  value={item.role}
+                                  onChange={(e) => updateLeadership(item.id, 'role', e.target.value)}
+                                  className="bg-white/5 border-white/10 focus:border-amber-500/50 text-white h-9"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-zinc-400 text-xs uppercase tracking-wider">
+                                  {item.type === 'Hackathon' ? 'Hackathon Name' :
+                                    item.type === 'Certificate' ? 'Issuing Organization' : 'Organization'}
+                                </Label>
+                                <Input
+                                  placeholder={
+                                    item.type === 'Hackathon' ? "e.g. HackMIT 2024" :
+                                      item.type === 'Certificate' ? "e.g. Amazon Web Services" : "e.g. Coding Club"
+                                  }
+                                  value={item.organization}
+                                  onChange={(e) => updateLeadership(item.id, 'organization', e.target.value)}
+                                  className="bg-white/5 border-white/10 focus:border-amber-500/50 text-white h-9"
+                                />
+                              </div>
                             </div>
                           </div>
+
                           <div className="space-y-2">
                             <Label className="text-zinc-400 text-xs uppercase tracking-wider">Duration</Label>
                             <Input placeholder="e.g. 2021 - 2022" value={item.duration} onChange={(e) => updateLeadership(item.id, 'duration', e.target.value)} className="bg-white/5 border-white/10 focus:border-amber-500/50 text-white h-9" />
@@ -907,14 +947,64 @@ const ResumeBuilder = () => {
               </div>
             )}
 
+            {/* Hackathons / Honors */}
+            {data.leadership.filter(item => item.type === 'Hackathon').length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-[11pt] font-bold uppercase border-b border-gray-400 mb-1">
+                  Honors & Hackathons
+                </h2>
+                <div className="space-y-2">
+                  {data.leadership.filter(item => item.type === 'Hackathon').map(item => (
+                    <div key={item.id}>
+                      <div className="flex justify-between items-baseline">
+                        <h3 className="font-bold">{item.organization}</h3>
+                        <span className="text-[10pt] italic">{item.duration}</span>
+                      </div>
+                      <div className="italic mb-1">{item.role}</div>
+                      <ul className="list-disc list-outside ml-4 space-y-0.5 text-[10.5pt]">
+                        {item.description.split('\n').map((line, i) => line.trim() && (
+                          <li key={i} className="pl-1">{line.trim().replace(/^[-•]\s*/, '')}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Certifications */}
+            {data.leadership.filter(item => item.type === 'Certificate').length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-[11pt] font-bold uppercase border-b border-gray-400 mb-1">
+                  Certifications
+                </h2>
+                <div className="space-y-2">
+                  {data.leadership.filter(item => item.type === 'Certificate').map(item => (
+                    <div key={item.id}>
+                      <div className="flex justify-between items-baseline">
+                        <h3 className="font-bold">{item.organization}</h3>
+                        <span className="text-[10pt] italic">{item.duration}</span>
+                      </div>
+                      <div className="italic mb-1">{item.role}</div>
+                      <ul className="list-disc list-outside ml-4 space-y-0.5 text-[10.5pt]">
+                        {item.description.split('\n').map((line, i) => line.trim() && (
+                          <li key={i} className="pl-1">{line.trim().replace(/^[-•]\s*/, '')}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Leadership */}
-            {data.leadership.length > 0 && (
+            {data.leadership.filter(item => !item.type || item.type === 'Leadership').length > 0 && (
               <div className="mb-4">
                 <h2 className="text-[11pt] font-bold uppercase border-b border-gray-400 mb-1">
                   Leadership / Extracurricular
                 </h2>
                 <div className="space-y-2">
-                  {data.leadership.map(item => (
+                  {data.leadership.filter(item => !item.type || item.type === 'Leadership').map(item => (
                     <div key={item.id}>
                       <div className="flex justify-between items-baseline">
                         <h3 className="font-bold">{item.organization}</h3>

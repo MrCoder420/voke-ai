@@ -11,10 +11,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { extractResumeText } from "@/utils/pdfParser";
 import {
   User, Briefcase, GraduationCap, Code, FileText,
   Plus, Trash2, Download, Printer, Wand2, ChevronLeft,
-  LayoutTemplate, Palette, Globe, Mail, Phone, MapPin, Linkedin, Github, Sparkles, Link as LinkIcon
+  LayoutTemplate, Palette, Globe, Mail, Phone, MapPin, Linkedin, Github, Sparkles, Link as LinkIcon, Upload
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
@@ -101,6 +102,8 @@ const ResumeBuilder = () => {
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Calculation for completion progress
   const calculateProgress = () => {
@@ -302,6 +305,50 @@ const ResumeBuilder = () => {
     }
   };
 
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportResume = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await extractResumeText(file);
+
+      toast.info("Parsing resume data...");
+      const { data: parsedData, error } = await supabase.functions.invoke("parse-resume", {
+        body: { resumeText: text }
+      });
+
+      if (error) throw error;
+
+      // Merge parsed data with existing data, preferring parsed data but keeping existing photo if not provided
+      setData(prev => ({
+        ...prev,
+        ...parsedData,
+        // Ensure arrays are at least empty arrays if missing from parsed data
+        experience: parsedData.experience || [],
+        education: parsedData.education || [],
+        projects: parsedData.projects || [],
+        leadership: parsedData.leadership || [],
+        // Preserve photo if it exists and parsed data doesn't have one (though parsed won't have photo usually)
+        photo: prev.photo
+      }));
+
+      toast.success("Resume imported successfully!");
+    } catch (error: any) {
+      console.error("Import failed:", error);
+      toast.error(error.message || "Failed to import resume");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''; // Reset input
+      }
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -389,6 +436,21 @@ const ResumeBuilder = () => {
           >
             <Sparkles className={`w-4 h-4 mr-2 ${analyzing ? 'animate-spin' : ''}`} />
             {analyzing ? 'Analyzing...' : 'ATS Score'}
+          </Button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept=".pdf"
+            onChange={handleImportResume}
+          />
+          <Button
+            onClick={handleImportClick}
+            disabled={importing}
+            className="bg-white/10 hover:bg-white/20 text-white border-0"
+          >
+            {importing ? <Sparkles className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+            {importing ? 'Importing...' : 'Import Resume'}
           </Button>
           <Button variant="outline" onClick={handlePrint} className="border-white/10 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-all shadow-sm">
             <Printer className="w-4 h-4 mr-2" />

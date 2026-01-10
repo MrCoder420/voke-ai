@@ -9,6 +9,7 @@ import { Upload, FileText, CheckCircle2, AlertCircle, TrendingUp, Download, Refr
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import ResumeAnalysisDisplay from "./ResumeAnalysisDisplay";
+import { extractResumeText } from "@/utils/pdfParser";
 
 interface ResumeAnalyzerProps {
     userId: string;
@@ -59,76 +60,13 @@ const ResumeAnalyzer = ({ userId, resumeUrl }: ResumeAnalyzerProps) => {
 
         setAnalyzing(true);
         try {
-            // 1. Fetch and Parse PDF
-            toast.info("Reading resume content...");
+            // 1. Fetch and Extract Text
             const resumeResponse = await fetch(resumeUrl);
             const resumeBlob = await resumeResponse.blob();
+            // Convert Blob to File to match the utility interface
+            const file = new File([resumeBlob], "resume.pdf", { type: "application/pdf" });
 
-            // Dynamic import for pdfjs
-            const pdfjsLib = await import('pdfjs-dist');
-            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-                'pdfjs-dist/build/pdf.worker.min.mjs',
-                import.meta.url
-            ).toString();
-
-            const arrayBuffer = await resumeBlob.arrayBuffer();
-
-            // Validation: Check for PDF magic bytes
-            const header = new TextDecoder().decode(arrayBuffer.slice(0, 5));
-            if (header !== '%PDF-' && !header.startsWith('%PDF')) {
-                throw new Error("Invalid PDF file. Please use 'Export to PDF' or 'Print to PDF' instead of renaming the file extension.");
-            }
-
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-            let resumeText = '';
-            for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items.map((item: any) => item.str).join(' ');
-                resumeText += pageText + '\n';
-            }
-
-            resumeText = resumeText.replace(/\s+/g, ' ').trim().substring(0, 4000);
-            console.log("Extracted resume text length:", resumeText.length);
-
-            // 2. OCR Fallback if text is insufficient
-            if (resumeText.length < 50) {
-                toast.info("No text layer found. Attempting OCR on image...", { duration: 5000 });
-                console.log("Starting OCR fallback...");
-
-                // Dynamic import Tesseract
-                const Tesseract = await import('tesseract.js');
-
-                let ocrText = '';
-                for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
-                    const page = await pdf.getPage(i);
-                    const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
-
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-
-                    if (context) {
-                        const renderContext = {
-                            canvasContext: context,
-                            viewport: viewport
-                        };
-                        await page.render(renderContext).promise;
-                        const { data: { text } } = await Tesseract.default.recognize(canvas, 'eng');
-                        ocrText += text + '\n';
-                        toast.info(`Scanned page ${i}/${Math.min(pdf.numPages, 3)}...`);
-                    }
-                }
-
-                resumeText = ocrText.replace(/\s+/g, ' ').trim().substring(0, 4000);
-                console.log("OCR extracted text length:", resumeText.length);
-
-                if (resumeText.length < 50) {
-                    throw new Error("Could not extract readable text even with OCR. Please upload a clearer PDF or a text-based document.");
-                }
-            }
+            const resumeText = await extractResumeText(file);
 
             // 3. Send to AI
             toast.info("Analyzing content...");

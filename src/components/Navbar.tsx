@@ -161,6 +161,7 @@ export const Navbar = () => {
 
                     {/* Right Side - Theme Toggle & CTA */}
                     <div className="flex items-center gap-3">
+
                         <UpgradeButton />
                         {userId && (
                             <>

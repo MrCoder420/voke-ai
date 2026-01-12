@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TrendingUp, DollarSign, Building2, Users, ArrowUpRight, Search } from "lucide-react";
+import { TrendingUp, DollarSign, Building2, Users, ArrowUpRight, Search, Briefcase } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -77,7 +77,7 @@ export const MarketPulse = ({ profile }: MarketPulseProps) => {
                 </CardHeader>
 
                 <CardContent className="relative z-10 space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                         {/* Salary Card */}
                         <motion.div
                             className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 flex flex-col justify-between group/salary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors cursor-default"
@@ -124,6 +124,30 @@ export const MarketPulse = ({ profile }: MarketPulseProps) => {
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     High demand in <span className="text-gray-900 dark:text-white">Tech, FinTech</span>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        {/* Job Matches Card - Relocated */}
+                        <motion.div
+                            className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 flex flex-col justify-between group/jobs hover:bg-gray-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                            whileHover={{ scale: 1.02 }}
+                            onClick={() => navigate("/job-recommendations")}
+                        >
+                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                                <Briefcase className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+                                Job Matches
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-2xl font-bold text-gray-900 dark:text-white">12</span>
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+                                    </span>
+                                </div>
+                                <div className="text-xs text-violet-600 dark:text-violet-400 font-medium flex items-center gap-1 mt-1">
+                                    View Recommended Jobs
                                 </div>
                             </div>
                         </motion.div>

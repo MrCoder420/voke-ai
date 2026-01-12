@@ -44,6 +44,7 @@ import CompanyDetail from "./pages/CompanyDetail";
 import Playground from "./pages/Playground";
 import Pricing from "./pages/Pricing";
 import ElitePrep from "./pages/ElitePrep";
+import NsatPrep from "./pages/NsatPrep";
 import CareerPlanView from "./pages/CareerPlanView";
 import ResumeBuilder from "./pages/ResumeBuilder";
 import NotFound from "./pages/NotFound";
@@ -106,6 +107,7 @@ const App = () => (
               <Route path="/playground" element={<Playground />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/elite-prep" element={<ElitePrep />} />
+              <Route path="/nsat-prep" element={<NsatPrep />} />
               <Route path="/resume-builder" element={<ResumeBuilder />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

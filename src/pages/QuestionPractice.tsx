@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import {
     ArrowLeft, Search, Filter, ExternalLink, Code2,
     Briefcase, CheckCircle2, Star, Zap, Flame, Trophy,
-    ChevronDown, Check, ChevronsUpDown
+    ChevronDown, Check, ChevronsUpDown, Bookmark, BookmarkCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Navbar } from "@/components/Navbar";
+import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import {
     Command,
@@ -43,6 +44,7 @@ const QuestionPractice = () => {
 
     // Solved questions tracking
     const [solvedQuestionIds, setSolvedQuestionIds] = useState<Set<number>>(new Set());
+    const [reviewedQuestionIds, setReviewedQuestionIds] = useState<Set<number>>(new Set());
     const [userId, setUserId] = useState<string | null>(null);
 
     // Fetch user and solved questions
@@ -51,6 +53,8 @@ const QuestionPractice = () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 setUserId(user.id);
+
+                // Fetch solved questions
                 const { data: solvedQuestions } = await supabase
                     .from('solved_questions' as any)
                     .select('question_id')
@@ -58,6 +62,16 @@ const QuestionPractice = () => {
 
                 if (solvedQuestions) {
                     setSolvedQuestionIds(new Set(solvedQuestions.map((q: any) => q.question_id)));
+                }
+
+                // Fetch reviewed questions
+                const { data: reviewedQuestions } = await supabase
+                    .from('review_questions' as any)
+                    .select('question_id')
+                    .eq('user_id', user.id);
+
+                if (reviewedQuestions) {
+                    setReviewedQuestionIds(new Set(reviewedQuestions.map((q: any) => q.question_id)));
                 }
             }
         };
@@ -86,14 +100,18 @@ const QuestionPractice = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 12;
 
+    // List Filters
+    const [showOnlyReviewed, setShowOnlyReviewed] = useState(false);
+
     const filteredQuestions = QUESTIONS.filter(q => {
         const matchesSearch = q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             q.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
         const matchesCompany = selectedCompany === "All" || q.companies.includes(selectedCompany);
         const matchesDifficulty = selectedDifficulty === "All" || q.difficulty === selectedDifficulty;
+        const matchesReviewed = !showOnlyReviewed || reviewedQuestionIds.has(q.id);
 
-        return matchesSearch && matchesCompany && matchesDifficulty;
+        return matchesSearch && matchesCompany && matchesDifficulty && matchesReviewed;
     });
 
     // Calculate pagination
@@ -144,6 +162,41 @@ const QuestionPractice = () => {
                 platform_url: url
             })
             .select();
+    };
+
+    // Toggle review status
+    const toggleReviewStatus = async (questionId: number) => {
+        if (!userId) {
+            toast.error("Please login to save for review");
+            return;
+        }
+
+        const isCurrentlyReviewed = reviewedQuestionIds.has(questionId);
+
+        if (isCurrentlyReviewed) {
+            // Remove from review
+            setReviewedQuestionIds(prev => {
+                const next = new Set(prev);
+                next.delete(questionId);
+                return next;
+            });
+
+            await supabase
+                .from('review_questions' as any)
+                .delete()
+                .eq('user_id', userId)
+                .eq('question_id', questionId);
+        } else {
+            // Add to review
+            setReviewedQuestionIds(prev => new Set([...prev, questionId]));
+
+            await supabase
+                .from('review_questions' as any)
+                .insert({
+                    user_id: userId,
+                    question_id: questionId
+                });
+        }
     };
 
     // Calculate solved stats
@@ -295,12 +348,21 @@ const QuestionPractice = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between p-3 rounded-lg bg-orange-500/10 text-orange-600 border border-orange-500/20">
-                                    <div className="flex items-center gap-2">
-                                        <Flame className="w-4 h-4 fill-orange-600" />
-                                        <span className="text-sm font-semibold">Day Streak</span>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex items-center justify-between p-3 rounded-lg bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                                        <div className="flex items-center gap-2">
+                                            <Flame className="w-4 h-4 fill-orange-600" />
+                                            <span className="text-sm font-semibold">Streak</span>
+                                        </div>
+                                        <span className="text-lg font-bold">3</span>
                                     </div>
-                                    <span className="text-lg font-bold">3</span>
+                                    <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                        <div className="flex items-center gap-2">
+                                            <Bookmark className="w-4 h-4 fill-amber-600" />
+                                            <span className="text-sm font-semibold">Review</span>
+                                        </div>
+                                        <span className="text-lg font-bold">{reviewedQuestionIds.size}</span>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
@@ -414,7 +476,23 @@ const QuestionPractice = () => {
                                 </PopoverContent>
                             </Popover>
 
-                            {(selectedCompany !== "All" || selectedDifficulty !== "All" || searchQuery) && (
+                            <Button
+                                variant={showOnlyReviewed ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => {
+                                    setShowOnlyReviewed(!showOnlyReviewed);
+                                    setCurrentPage(1);
+                                }}
+                                className={cn(
+                                    "gap-2 transition-all",
+                                    showOnlyReviewed ? "bg-amber-500 hover:bg-amber-600 border-amber-500 shadow-lg shadow-amber-500/20" : "hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                                )}
+                            >
+                                <Bookmark className={cn("w-4 h-4", showOnlyReviewed && "fill-current")} />
+                                <span className="hidden sm:inline">My List</span>
+                            </Button>
+
+                            {(selectedCompany !== "All" || selectedDifficulty !== "All" || searchQuery || showOnlyReviewed) && (
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -422,6 +500,7 @@ const QuestionPractice = () => {
                                         setSelectedCompany("All");
                                         setSelectedDifficulty("All");
                                         setSearchQuery("");
+                                        setShowOnlyReviewed(false);
                                         setCurrentPage(1);
                                     }}
                                     className="text-muted-foreground hover:text-destructive transition-colors"
@@ -450,7 +529,7 @@ const QuestionPractice = () => {
                                     getDifficultyBorder(question.difficulty),
                                     solvedQuestionIds.has(question.id)
                                         ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-500/50 ring-1 ring-emerald-500/20"
-                                        : "bg-card/50"
+                                        : (reviewedQuestionIds.has(question.id) ? "bg-amber-50/30 dark:bg-amber-950/5 border-amber-500/30 ring-1 ring-amber-500/10" : "bg-card/50")
                                 )}>
                                     <CardHeader className="pb-3 relative">
                                         {/* Accent Glow */}
@@ -462,14 +541,37 @@ const QuestionPractice = () => {
                                         )} />
 
                                         <div className="flex justify-between items-start mb-2 relative z-10">
-                                            <Badge variant="outline" className={cn(
-                                                "rounded-md border-0 px-2.5 py-0.5 font-semibold",
-                                                solvedQuestionIds.has(question.id)
-                                                    ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
-                                                    : getDifficultyColor(question.difficulty)
-                                            )}>
-                                                {question.difficulty}
-                                            </Badge>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={cn(
+                                                    "rounded-md border-0 px-2.5 py-0.5 font-semibold",
+                                                    solvedQuestionIds.has(question.id)
+                                                        ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
+                                                        : getDifficultyColor(question.difficulty)
+                                                )}>
+                                                    {question.difficulty}
+                                                </Badge>
+
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className={cn(
+                                                        "w-8 h-8 rounded-full transition-all duration-300",
+                                                        reviewedQuestionIds.has(question.id)
+                                                            ? "text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 shadow-sm shadow-amber-500/10"
+                                                            : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                                                    )}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleReviewStatus(question.id);
+                                                    }}
+                                                >
+                                                    {reviewedQuestionIds.has(question.id) ? (
+                                                        <BookmarkCheck className="w-4 h-4 fill-current" />
+                                                    ) : (
+                                                        <Bookmark className="w-4 h-4" />
+                                                    )}
+                                                </Button>
+                                            </div>
 
                                             <div className="flex items-center gap-2">
                                                 {solvedQuestionIds.has(question.id) && (

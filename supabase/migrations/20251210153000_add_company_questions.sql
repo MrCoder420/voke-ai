@@ -27,12 +27,32 @@ ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.company_questions ENABLE ROW LEVEL SECURITY;
 
 -- Create policies (Allow read to everyone, write only to service_role or admin if needed)
-CREATE POLICY "Allow public read access on companies"
-ON public.companies FOR SELECT
-TO public
-USING (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE tablename = 'companies' AND policyname = 'Allow public read access on companies'
+    ) THEN
+        CREATE POLICY "Allow public read access on companies"
+        ON public.companies FOR SELECT
+        TO public
+        USING (true);
+    END IF;
+END
+$$;
 
-CREATE POLICY "Allow public read access on company_questions"
-ON public.company_questions FOR SELECT
-TO public
-USING (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE tablename = 'company_questions' AND policyname = 'Allow public read access on company_questions'
+    ) THEN
+        CREATE POLICY "Allow public read access on company_questions"
+        ON public.company_questions FOR SELECT
+        TO public
+        USING (true);
+    END IF;
+END
+$$;

@@ -26,6 +26,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 import { QUESTIONS, COMPANIES, DIFFICULTIES } from "@/data/questions";
 
@@ -39,6 +40,29 @@ const QuestionPractice = () => {
     // Loading state
     const [isLoading, setIsLoading] = useState(true);
     const [loadingPhase, setLoadingPhase] = useState(0);
+
+    // Solved questions tracking
+    const [solvedQuestionIds, setSolvedQuestionIds] = useState<Set<number>>(new Set());
+    const [userId, setUserId] = useState<string | null>(null);
+
+    // Fetch user and solved questions
+    useEffect(() => {
+        const fetchUserAndSolvedQuestions = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setUserId(user.id);
+                const { data: solvedQuestions } = await supabase
+                    .from('solved_questions' as any)
+                    .select('question_id')
+                    .eq('user_id', user.id);
+
+                if (solvedQuestions) {
+                    setSolvedQuestionIds(new Set(solvedQuestions.map((q: any) => q.question_id)));
+                }
+            }
+        };
+        fetchUserAndSolvedQuestions();
+    }, []);
 
     useEffect(() => {
         // Cycle through companies
@@ -100,6 +124,34 @@ const QuestionPractice = () => {
             case "Hard": return "border-l-red-500";
             default: return "border-l-gray-500";
         }
+    };
+
+    // Mark question as solved
+    const markQuestionAsSolved = async (questionId: number, title: string, difficulty: string, url: string) => {
+        if (!userId) return;
+
+        // Optimistically update UI
+        setSolvedQuestionIds(prev => new Set([...prev, questionId]));
+
+        // Save to database
+        await supabase
+            .from('solved_questions' as any)
+            .insert({
+                user_id: userId,
+                question_id: questionId,
+                question_title: title,
+                difficulty: difficulty,
+                platform_url: url
+            })
+            .select();
+    };
+
+    // Calculate solved stats
+    const solvedStats = {
+        easy: QUESTIONS.filter(q => solvedQuestionIds.has(q.id) && q.difficulty === 'Easy').length,
+        medium: QUESTIONS.filter(q => solvedQuestionIds.has(q.id) && q.difficulty === 'Medium').length,
+        hard: QUESTIONS.filter(q => solvedQuestionIds.has(q.id) && q.difficulty === 'Hard').length,
+        total: solvedQuestionIds.size
     };
 
     if (isLoading) {
@@ -222,23 +274,23 @@ const QuestionPractice = () => {
                             <CardContent className="space-y-6">
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Weekly Goal</span>
-                                        <span className="font-semibold">12 / 20</span>
+                                        <span className="text-muted-foreground">Total Solved</span>
+                                        <span className="font-semibold">{solvedStats.total} / {QUESTIONS.length}</span>
                                     </div>
-                                    <Progress value={60} className="h-2 bg-muted/50" />
+                                    <Progress value={(solvedStats.total / QUESTIONS.length) * 100} className="h-2 bg-muted/50" />
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-2">
                                     <div className="p-3 rounded-lg bg-background/50 border border-border/50 text-center">
-                                        <div className="text-2xl font-bold text-emerald-500">5</div>
+                                        <div className="text-2xl font-bold text-emerald-500">{solvedStats.easy}</div>
                                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Easy</div>
                                     </div>
                                     <div className="p-3 rounded-lg bg-background/50 border border-border/50 text-center">
-                                        <div className="text-2xl font-bold text-amber-500">3</div>
+                                        <div className="text-2xl font-bold text-amber-500">{solvedStats.medium}</div>
                                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Med</div>
                                     </div>
                                     <div className="p-3 rounded-lg bg-background/50 border border-border/50 text-center">
-                                        <div className="text-2xl font-bold text-red-500">1</div>
+                                        <div className="text-2xl font-bold text-red-500">{solvedStats.hard}</div>
                                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Hard</div>
                                     </div>
                                 </div>
@@ -393,20 +445,39 @@ const QuestionPractice = () => {
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 transition={{ duration: 0.2 }}
                             >
-                                <Card className={`h-full hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group cursor-pointer border-l-4 ${getDifficultyBorder(question.difficulty)} border-y border-r border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden`}>
+                                <Card className={cn(
+                                    "h-full hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group cursor-pointer border-l-4 border-y border-r border-border/60 backdrop-blur-sm overflow-hidden",
+                                    getDifficultyBorder(question.difficulty),
+                                    solvedQuestionIds.has(question.id)
+                                        ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-500/50 ring-1 ring-emerald-500/20"
+                                        : "bg-card/50"
+                                )}>
                                     <CardHeader className="pb-3 relative">
                                         {/* Accent Glow */}
                                         <div className={cn(
-                                            "absolute top-0 right-0 w-24 h-24  rounded-bl-full opacity-10 transition-opacity group-hover:opacity-20 pointer-events-none",
-                                            question.difficulty === 'Easy' ? 'bg-emerald-500' : question.difficulty === 'Medium' ? 'bg-amber-500' : 'bg-red-500'
+                                            "absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10 transition-opacity group-hover:opacity-20 pointer-events-none",
+                                            solvedQuestionIds.has(question.id)
+                                                ? "bg-emerald-500"
+                                                : (question.difficulty === 'Easy' ? 'bg-emerald-500' : question.difficulty === 'Medium' ? 'bg-amber-500' : 'bg-red-500')
                                         )} />
 
                                         <div className="flex justify-between items-start mb-2 relative z-10">
-                                            <Badge variant="outline" className={`rounded-md border-0 px-2.5 py-0.5 font-semibold ${getDifficultyColor(question.difficulty)}`}>
+                                            <Badge variant="outline" className={cn(
+                                                "rounded-md border-0 px-2.5 py-0.5 font-semibold",
+                                                solvedQuestionIds.has(question.id)
+                                                    ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
+                                                    : getDifficultyColor(question.difficulty)
+                                            )}>
                                                 {question.difficulty}
                                             </Badge>
 
                                             <div className="flex items-center gap-2">
+                                                {solvedQuestionIds.has(question.id) && (
+                                                    <Badge className="bg-emerald-500 text-white border-0 hover:bg-emerald-600 shadow-sm shadow-emerald-500/20">
+                                                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                                                        Verified Solved
+                                                    </Badge>
+                                                )}
                                                 <div className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-2 py-1 rounded-full border border-border/50">
                                                     <img
                                                         src={question.platform === "LeetCode" ? "https://upload.wikimedia.org/wikipedia/commons/1/19/LeetCode_logo_black.png" : "/favicon.ico"}
@@ -418,7 +489,10 @@ const QuestionPractice = () => {
                                             </div>
                                         </div>
 
-                                        <CardTitle className="text-xl font-bold group-hover:text-primary transition-colors line-clamp-2 leading-tight">
+                                        <CardTitle className={cn(
+                                            "text-xl font-bold transition-colors line-clamp-2 leading-tight",
+                                            solvedQuestionIds.has(question.id) ? "text-emerald-700 dark:text-emerald-400" : "group-hover:text-primary"
+                                        )}>
                                             {question.title}
                                         </CardTitle>
                                     </CardHeader>
@@ -428,12 +502,22 @@ const QuestionPractice = () => {
                                         {question.companies.length > 0 && (
                                             <div className="flex flex-wrap gap-1.5 h-[26px] overflow-hidden">
                                                 {question.companies.slice(0, 3).map(company => (
-                                                    <span key={company} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
+                                                    <span key={company} className={cn(
+                                                        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                                        solvedQuestionIds.has(question.id)
+                                                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                                            : "bg-muted text-muted-foreground"
+                                                    )}>
                                                         {company}
                                                     </span>
                                                 ))}
                                                 {question.companies.length > 3 && (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
+                                                    <span className={cn(
+                                                        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                                        solvedQuestionIds.has(question.id)
+                                                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                                            : "bg-muted text-muted-foreground"
+                                                    )}>
                                                         +{question.companies.length - 3}
                                                     </span>
                                                 )}
@@ -443,21 +527,96 @@ const QuestionPractice = () => {
                                         {/* Tags */}
                                         <div className="flex flex-wrap gap-1.5 min-h-[48px] content-start">
                                             {question.tags.slice(0, 4).map(tag => (
-                                                <span key={tag} className="text-[10px] text-violet-600/80 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 px-2 py-0.5 rounded-full border border-violet-100 dark:border-violet-800">
+                                                <span key={tag} className={cn(
+                                                    "text-[10px] px-2 py-0.5 rounded-full border",
+                                                    solvedQuestionIds.has(question.id)
+                                                        ? "text-emerald-600 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/20"
+                                                        : "text-violet-600/80 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border-violet-100 dark:border-violet-800"
+                                                )}>
                                                     {tag}
                                                 </span>
                                             ))}
                                         </div>
                                     </CardContent>
 
-                                    <CardFooter className="pt-0">
+                                    <CardFooter className="pt-0 flex flex-col gap-2">
                                         <Button
-                                            className="w-full bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all group/btn shadow-none hover:shadow-lg hover:shadow-primary/20"
-                                            onClick={() => window.open(question.url, '_blank')}
+                                            className={cn(
+                                                "w-full transition-all group/btn shadow-none",
+                                                solvedQuestionIds.has(question.id)
+                                                    ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"
+                                                    : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground hover:shadow-lg hover:shadow-primary/20"
+                                            )}
+                                            onClick={() => {
+                                                window.open(question.url, '_blank');
+                                            }}
                                         >
-                                            <span className="font-semibold">Solve Challenge</span>
+                                            <span className="font-semibold">{solvedQuestionIds.has(question.id) ? 'Review Solution' : 'Solve Challenge'}</span>
                                             <ExternalLink className="w-4 h-4 ml-2 group-hover/btn:translate-x-1 transition-transform" />
                                         </Button>
+
+                                        {!solvedQuestionIds.has(question.id) && (
+                                            <Button
+                                                variant="outline"
+                                                className="w-full border-dashed group/verify"
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    // This will be replaced by call to markQuestionAsVerified
+                                                    const { data: { user } } = await supabase.auth.getUser();
+                                                    if (!user) {
+                                                        alert("Please login to verify solutions");
+                                                        return;
+                                                    }
+
+                                                    const { data: profileData } = await supabase
+                                                        .from('profiles')
+                                                        .select('leetcode_id, codeforces_id')
+                                                        .eq('id', user.id)
+                                                        .single();
+
+                                                    const profile = profileData as any;
+
+                                                    if (!profile?.leetcode_id && !profile?.codeforces_id) {
+                                                        alert("Please add your LeetCode/Codeforces ID in profile to verify");
+                                                        return;
+                                                    }
+
+                                                    // Determine slug/identifier
+                                                    let identifier = "";
+                                                    if (question.platform === "LeetCode") {
+                                                        const urlParts = question.url.split('/');
+                                                        identifier = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2] || "";
+                                                    } else if (question.platform === "Codeforces") {
+                                                        // Example: https://codeforces.com/problemset/problem/1915/A
+                                                        const urlParts = question.url.split('/');
+                                                        const index = urlParts.pop();
+                                                        const contestId = urlParts.pop();
+                                                        identifier = contestId && index ? `${contestId}${index}` : question.title;
+                                                    }
+
+                                                    try {
+                                                        const { data, error } = await supabase.functions.invoke('verify-question-solution', {
+                                                            body: {
+                                                                platform: question.platform,
+                                                                username: question.platform === "LeetCode" ? profile.leetcode_id : profile.codeforces_id,
+                                                                identifier: identifier || question.title
+                                                            }
+                                                        });
+
+                                                        if (data?.isSolved) {
+                                                            markQuestionAsSolved(question.id, question.title, question.difficulty, question.url);
+                                                        } else {
+                                                            alert("Solution not found on " + question.platform + ". Make sure you've solved it or added your public handle in profile.");
+                                                        }
+                                                    } catch (err) {
+                                                        console.error("Verification error:", err);
+                                                    }
+                                                }}
+                                            >
+                                                <CheckCircle2 className="w-4 h-4 mr-2 group-hover/verify:text-emerald-500" />
+                                                Verify Solution
+                                            </Button>
+                                        )}
                                     </CardFooter>
                                 </Card>
                             </motion.div>

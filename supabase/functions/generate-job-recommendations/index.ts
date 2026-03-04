@@ -1,4 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -36,18 +37,6 @@ serve(async (req) => {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
         const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-        // 2. Dynamic Import: Groq SDK
-        console.log("Importing Groq...");
-        let Groq;
-        try {
-            // Try the ESM CDN version which is most reliable for Deno
-            const module = await import('https://esm.sh/groq-sdk@0.8.0');
-            Groq = module.default;
-        } catch (err) {
-            console.error("Failed to import Groq:", err);
-            throw new Error(`Groq import failed: ${err.message}`);
-        }
 
         // Check if user has recent recommendations
         if (!forceRefresh) {
@@ -139,8 +128,6 @@ serve(async (req) => {
 
         // Fetch jobs
         console.log("Fetching jobs...");
-        const jobApiKey = Deno.env.get('JOB_SEARCH_API_KEY')
-        // API key removed as it was causing 403 errors and the API is public
         const museUrl = `https://www.themuse.com/api/public/jobs?page=1&descending=true&category=Engineering`
 
         let jobPostings = [];
@@ -199,11 +186,22 @@ serve(async (req) => {
         }
 
         // AI Matching
-        console.log("Starting AI matching...");
-        const groqApiKey = Deno.env.get('GROQ_API_KEY')
-        if (!groqApiKey) throw new Error('GROQ_API_KEY not set')
+        console.log("Starting AI matching with Bedrock...");
+        const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+        const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+        const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
 
-        const groq = new Groq({ apiKey: groqApiKey })
+        if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+            throw new Error("AWS credentials are not configured");
+        }
+
+        const bedrock = new BedrockRuntimeClient({
+            region: AWS_REGION,
+            credentials: {
+                accessKeyId: AWS_ACCESS_KEY_ID,
+                secretAccessKey: AWS_SECRET_ACCESS_KEY,
+            },
+        });
 
         // Enhanced AI matching prompt with comprehensive interview data
         const communicationSkills = avgDelivery ? `
@@ -268,17 +266,29 @@ Format:
   ]
 }`
 
-        const completion = await groq.chat.completions.create({
+        const command = new ConverseCommand({
+            modelId: "meta.llama3-3-70b-instruct-v1:0",
             messages: [
-                { role: "system", content: "You are a career advisor. Return valid JSON." },
-                { role: "user", content: prompt }
+                {
+                    role: "user",
+                    content: [{ text: prompt }]
+                }
             ],
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.7,
-            response_format: { type: "json_object" }
-        })
+            system: [{ text: "You are a career advisor. Return valid JSON." }],
+            inferenceConfig: {
+                temperature: 0.7,
+                maxTokens: 4096,
+            }
+        });
 
-        const aiResponse = JSON.parse(completion.choices[0].message.content || '{}')
+        const data = await bedrock.send(command);
+        const aiContent = data.output?.message?.content?.[0]?.text;
+
+        if (!aiContent) {
+            throw new Error("No response from AI");
+        }
+
+        const aiResponse = JSON.parse(aiContent)
         const recommendations = aiResponse.recommendations || []
 
         // Store recommendations

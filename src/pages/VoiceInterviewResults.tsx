@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import SixQAnalysis from "@/components/SixQAnalysis";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogOut, ArrowLeft, TrendingUp, MessageSquare, Award, Mic, CheckCircle2, AlertCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import SixQAnalysis from "@/components/SixQAnalysis";
+import { supabase } from "@/integrations/supabase/client";
+import { AlertCircle, ArrowLeft, Award, CheckCircle2, LogOut, MessageSquare, Mic, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 const VoiceInterviewResults = () => {
   const { id } = useParams();
@@ -17,6 +17,28 @@ const VoiceInterviewResults = () => {
   useEffect(() => {
     checkAuth();
     loadResults();
+
+    // Subscribe to realtime updates for this session
+    const channel = supabase
+      .channel(`session-results-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'interview_sessions',
+          filter: `id=eq.${id}`
+        },
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          setSession(payload.new);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   const checkAuth = async () => {
@@ -60,12 +82,20 @@ const VoiceInterviewResults = () => {
     return "from-red-500 to-pink-500";
   };
 
-  if (loading) {
+  // Keep loading if data is being fetched OR if session exists but hasn't been analyzed yet
+  if (loading || (session && session.overall_score === null)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-500"></div>
-          <p className="text-muted-foreground animate-pulse">Analyzing your conversation...</p>
+          <p className="text-muted-foreground animate-pulse text-lg font-medium">
+            {session ? "Generating your detailed report..." : "Analyzing your conversation..."}
+          </p>
+          {session && (
+            <p className="text-sm text-muted-foreground/60 max-w-xs text-center">
+              Our AI is reviewing your transcript to provide evidence-based feedback. This usually takes 10-15 seconds.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -165,28 +195,27 @@ const VoiceInterviewResults = () => {
             </Card>
 
             {/* Transcript Card */}
-             <Card className="bg-card/30 backdrop-blur-xl border-border/50 overflow-hidden flex flex-col h-[500px]">
+            <Card className="bg-card/30 backdrop-blur-xl border-border/50 overflow-hidden flex flex-col h-[500px]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-violet-500" />
-                    Transcript
+                  <MessageSquare className="w-5 h-5 text-violet-500" />
+                  Transcript
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
                 {session.transcript && Array.isArray(session.transcript) ? (
-                    session.transcript.map((msg: any, idx: number) => (
-                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                             <div className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
-                                msg.role === 'user'
-                                ? 'bg-primary/20 text-primary-foreground rounded-tr-sm'
-                                : 'bg-muted/50 text-muted-foreground rounded-tl-sm'
-                             }`}>
-                                {msg.text}
-                             </div>
-                        </div>
-                    ))
+                  session.transcript.map((msg: any, idx: number) => (
+                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${msg.role === 'user'
+                          ? 'bg-primary/20 text-primary-foreground rounded-tr-sm'
+                          : 'bg-muted/50 text-muted-foreground rounded-tl-sm'
+                        }`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))
                 ) : (
-                    <p className="text-muted-foreground text-center italic">No transcript available.</p>
+                  <p className="text-muted-foreground text-center italic">No transcript available.</p>
                 )}
               </CardContent>
             </Card>
@@ -194,7 +223,7 @@ const VoiceInterviewResults = () => {
 
           {/* Right Column: Detailed Analysis */}
           <div className="lg:col-span-2 space-y-6">
-           
+
             {/* Metrics Grid */}
             <div className="grid md:grid-cols-2 gap-4">
               <Card className="bg-card/30 backdrop-blur-xl border-border/50">
@@ -240,7 +269,7 @@ const VoiceInterviewResults = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                   <div className="prose prose-sm max-w-none dark:prose-invert text-muted-foreground leading-relaxed">
+                  <div className="prose prose-sm max-w-none dark:prose-invert text-muted-foreground leading-relaxed">
                     <div dangerouslySetInnerHTML={{ __html: session.feedback_summary.replace(/\n/g, "<br>") }} />
                   </div>
                 </CardContent>

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -14,13 +15,15 @@ serve(async (req) => {
 
     try {
         const { sessionId } = await req.json();
-        console.log("Generating overall feedback for session:", sessionId);
+        console.log("Generating overall feedback for session with Bedrock:", sessionId);
 
-        const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-        console.log("DEBUG: GROQ_API_KEY present:", !!GROQ_API_KEY);
-        if (!GROQ_API_KEY) {
+        const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+        const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+        const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+        if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
             return new Response(
-                JSON.stringify({ error: "GROQ_API_KEY is not configured" }),
+                JSON.stringify({ error: "AWS credentials are not configured" }),
                 {
                     status: 400,
                     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -118,33 +121,35 @@ Provide comprehensive overall feedback in the following format (strict JSON):
 
 Focus on patterns across all answers, not individual questions.`;
 
-        const response = await fetch(
-            "https://api.groq.com/openai/v1/chat/completions",
-            {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${GROQ_API_KEY}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    model: "llama-3.3-70b-versatile",
-                    messages: [
-                        {
-                            role: "user",
-                            content: analysisPrompt,
-                        },
-                    ],
-                    temperature: 0.3,
-                }),
+        const bedrock = new BedrockRuntimeClient({
+            region: AWS_REGION,
+            credentials: {
+                accessKeyId: AWS_ACCESS_KEY_ID,
+                secretAccessKey: AWS_SECRET_ACCESS_KEY,
+            },
+        });
+
+        const command = new ConverseCommand({
+            modelId: "meta.llama3-3-70b-instruct-v1:0",
+            messages: [
+                {
+                    role: "user",
+                    content: [{ text: "Please analyze the interview session and provide the requested JSON feedback." }]
+                }
+            ],
+            system: [{ text: analysisPrompt }],
+            inferenceConfig: {
+                temperature: 0.3,
+                maxTokens: 4096,
             }
-        );
+        });
 
-        if (!response.ok) {
-            throw new Error(`AI API error: ${response.status}`);
+        const data = await bedrock.send(command);
+        const aiResponse = data.output?.message?.content?.[0]?.text;
+
+        if (!aiResponse) {
+            throw new Error("No response from AI");
         }
-
-        const aiData = await response.json();
-        const aiResponse = aiData.choices[0].message.content;
 
         // Parse AI response
         let analysis;

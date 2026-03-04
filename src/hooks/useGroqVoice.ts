@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Groq from 'groq-sdk';
-import { LiveStatus, MessageLog } from '../types/voice';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { LiveStatus, MessageLog } from '../types/voice';
 
 const SYSTEM_INSTRUCTION = `YOU ARE:
 A real-time voice-based conversational assistant designed to conduct a professional yet friendly interview.
@@ -55,6 +55,7 @@ interface UseGroqVoiceReturn {
     logs: MessageLog[];
     errorDetails: string | null;
     sendHiddenContext: (text: string) => Promise<void>;
+    setLiveContext: (text: string) => void;
 }
 
 interface UseGroqVoiceProps {
@@ -85,6 +86,7 @@ export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const contextRef = useRef<string>('');
+    const liveContextRef = useRef<string>('');
     const conversationHistoryRef = useRef<{ role: 'user' | 'assistant' | 'system'; content: string }[]>([]);
     const statusRef = useRef(status);
     const isAiSpeakingRef = useRef(isAiSpeaking);
@@ -315,7 +317,12 @@ export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
             console.log('DEBUG: Sending to Groq...');
 
             const messages = [
-                { role: 'system', content: SYSTEM_INSTRUCTION + '\n\nCONTEXT:\n' + contextRef.current },
+                {
+                    role: 'system',
+                    content: SYSTEM_INSTRUCTION +
+                        '\n\nBASE CONTEXT:\n' + contextRef.current +
+                        '\n\nLIVE CONTEXT (USE AS YOUR CURRENT EYES):\n' + liveContextRef.current
+                },
                 ...conversationHistoryRef.current
             ];
 
@@ -356,7 +363,12 @@ export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
 
         try {
             const messages = [
-                { role: 'system', content: SYSTEM_INSTRUCTION + '\n\nCONTEXT:\n' + contextRef.current },
+                {
+                    role: 'system',
+                    content: SYSTEM_INSTRUCTION +
+                        '\n\nBASE CONTEXT:\n' + contextRef.current +
+                        '\n\nLIVE CONTEXT (USE AS YOUR CURRENT EYES):\n' + liveContextRef.current
+                },
                 ...conversationHistoryRef.current
             ];
 
@@ -579,7 +591,9 @@ export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
                         messages: [
                             {
                                 role: 'system',
-                                content: SYSTEM_INSTRUCTION + '\n\nCONTEXT:\n' + contextRef.current
+                                content: SYSTEM_INSTRUCTION +
+                                    '\n\nBASE CONTEXT:\n' + contextRef.current +
+                                    '\n\nLIVE CONTEXT:\n' + liveContextRef.current
                             },
                             {
                                 role: 'user',
@@ -597,7 +611,9 @@ export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
                             messages: [
                                 {
                                     role: 'system',
-                                    content: SYSTEM_INSTRUCTION + '\n\nCONTEXT:\n' + contextRef.current
+                                    content: SYSTEM_INSTRUCTION +
+                                        '\n\nBASE CONTEXT:\n' + contextRef.current +
+                                        '\n\nLIVE CONTEXT:\n' + liveContextRef.current
                                 },
                                 { role: 'user', content: 'Say hello and ask for introduction.' }
                             ],
@@ -699,6 +715,9 @@ export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
         volume,
         logs,
         errorDetails,
-        sendHiddenContext
+        sendHiddenContext,
+        setLiveContext: (text: string) => {
+            liveContextRef.current = text;
+        }
     };
 }

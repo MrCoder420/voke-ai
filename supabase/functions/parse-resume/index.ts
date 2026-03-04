@@ -1,6 +1,6 @@
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -16,9 +16,12 @@ Deno.serve(async (req: Request) => {
     try {
         const { resumeText } = await req.json();
 
-        const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-        if (!GROQ_API_KEY) {
-            throw new Error("GROQ_API_KEY is not configured");
+        const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+        const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+        const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+        if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+            throw new Error("AWS credentials are not configured");
         }
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -41,7 +44,15 @@ Deno.serve(async (req: Request) => {
             throw new Error("Resume content is missing or too short");
         }
 
-        console.log(`Parsing resume text length: ${resumeText.length}`);
+        console.log(`Parsing resume text with Bedrock Llama 3.3 (length: ${resumeText.length})`);
+
+        const bedrock = new BedrockRuntimeClient({
+            region: AWS_REGION,
+            credentials: {
+                accessKeyId: AWS_ACCESS_KEY_ID,
+                secretAccessKey: AWS_SECRET_ACCESS_KEY,
+            },
+        });
 
         const systemPrompt = `You are an expert resume parser. Your job is to extract structured data from raw resume text.
         You must return a JSON object that strictly matches the following TypeScript interfaces:
@@ -109,34 +120,23 @@ Deno.serve(async (req: Request) => {
         - Preserve original text formatting where possible (e.g. capitals).
         `;
 
-        const response = await fetch(
-            "https://api.groq.com/openai/v1/chat/completions",
-            {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${GROQ_API_KEY}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    model: "llama-3.3-70b-versatile",
-                    messages: [
-                        { role: "system", content: systemPrompt },
-                        { role: "user", content: resumeText }
-                    ],
-                    temperature: 0.1,
-                    response_format: { type: "json_object" },
-                }),
+        const command = new ConverseCommand({
+            modelId: "meta.llama3-3-70b-instruct-v1:0",
+            messages: [
+                {
+                    role: "user",
+                    content: [{ text: resumeText }]
+                }
+            ],
+            system: [{ text: systemPrompt }],
+            inferenceConfig: {
+                temperature: 0.1,
+                maxTokens: 4096,
             }
-        );
+        });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Groq API error:", response.status, errorText);
-            throw new Error(`Groq API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const parsedContent = data.choices[0]?.message?.content;
+        const data = await bedrock.send(command);
+        const parsedContent = data.output?.message?.content?.[0]?.text;
 
         if (!parsedContent) {
             throw new Error("No response from AI");

@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import Groq from "npm:groq-sdk@0.8.0"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -94,10 +94,22 @@ serve(async (req) => {
             }
         }
 
-        // Initialize Groq
-        const groq = new Groq({
-            apiKey: Deno.env.get('GROQ_API_KEY')
-        })
+        // Initialize Bedrock
+        const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+        const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+        const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+        if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+            throw new Error("AWS credentials are not configured");
+        }
+
+        const bedrock = new BedrockRuntimeClient({
+            region: AWS_REGION,
+            credentials: {
+                accessKeyId: AWS_ACCESS_KEY_ID,
+                secretAccessKey: AWS_SECRET_ACCESS_KEY,
+            },
+        });
 
         // Prepare prompt for AI
         const prompt = `You are an expert career coach specializing in creating actionable 3-month career development plans.
@@ -185,27 +197,31 @@ Return ONLY valid JSON in this exact format:
       "achieved": false
     }
   ]
-}`
+}`;
 
-        // Call Groq API
-        const completion = await groq.chat.completions.create({
+        const command = new ConverseCommand({
+            modelId: "meta.llama3-3-70b-instruct-v1:0",
             messages: [
                 {
-                    role: "system",
-                    content: "You are an expert career coach. Always respond with valid JSON only. Be specific and actionable."
-                },
-                {
                     role: "user",
-                    content: prompt
+                    content: [{ text: prompt }]
                 }
             ],
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.8,
-            max_tokens: 4000,
-            response_format: { type: "json_object" }
-        })
+            system: [{ text: "You are an expert career coach. Always respond with valid JSON only. Be specific and actionable." }],
+            inferenceConfig: {
+                temperature: 0.8,
+                maxTokens: 4000,
+            }
+        });
 
-        const careerPlan = JSON.parse(completion.choices[0].message.content || '{}')
+        const data = await bedrock.send(command);
+        const aiResponse = data.output?.message?.content?.[0]?.text;
+
+        if (!aiResponse) {
+            throw new Error("No response from AI");
+        }
+
+        const careerPlan = JSON.parse(aiResponse);
 
         // Store career plan in database
         const { data: insertedPlan, error: insertError } = await supabase

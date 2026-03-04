@@ -1,17 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useGroqVoice } from '@/hooks/useGroqVoice';
 import { AudioVisualizerSimple } from '@/components/AudioVisualizerSimple';
-import { LiveStatus, MessageLog } from '@/types/voice';
-import { Mic, X, MessageSquare, Sparkles, AlertCircle, ArrowLeft, Code, Play, Send, Maximize2, Minimize2, FileText, LogOut } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import Editor from "@monaco-editor/react";
-import { executeCode } from "@/utils/codeExecutor";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useGroqVoice } from '@/hooks/useGroqVoice';
+import { supabase } from '@/integrations/supabase/client';
+import { LiveStatus } from '@/types/voice';
+import { executeCode } from "@/utils/codeExecutor";
+import Editor from "@monaco-editor/react";
+import { ArrowLeft, Code, FileText, LogOut, MessageSquare, Mic, Play, Send, Sparkles, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const VoiceAssistant: React.FC = () => {
     const navigate = useNavigate();
@@ -24,7 +24,8 @@ const VoiceAssistant: React.FC = () => {
         volume,
         logs,
         errorDetails,
-        sendHiddenContext
+        sendHiddenContext,
+        setLiveContext
     } = useGroqVoice();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -39,8 +40,22 @@ const VoiceAssistant: React.FC = () => {
     const [problemStatement, setProblemStatement] = useState<string>("Waiting for problem statement...");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Detailed Feedback State
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [duration, setDuration] = useState(0);
+
+    // Live Context Sync (Debounced 2s)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (interviewMode === 'coding' && (code || codeOutput)) {
+                const liveCtx = `CURRENT CODE:\n${code}\n\nLAST EXECUTION OUTPUT:\n${codeOutput || 'No output yet'}`;
+                setLiveContext(liveCtx);
+                console.log("Syncing live context to AI...");
+            } else if (interviewMode === 'voice') {
+                setLiveContext("");
+            }
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, [code, codeOutput, interviewMode]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -102,7 +117,6 @@ const VoiceAssistant: React.FC = () => {
         loadUserContext();
     }, []);
 
-    const [duration, setDuration] = useState(0);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
@@ -224,20 +238,15 @@ const VoiceAssistant: React.FC = () => {
 
             if (error) throw error;
 
-            toast.loading("Analyzing session...", { id: toastId });
-
-            // Trigger analysis (Assuming there is an Edge Function for this)
-            try {
-                await supabase.functions.invoke('evaluate-interview', {
-                    body: { session_id: data.id }
-                });
-            } catch (evalError) {
+            // Trigger analysis (NON-BLOCKING)
+            supabase.functions.invoke('evaluate-interview', {
+                body: { session_id: data.id }
+            }).catch(evalError => {
                 console.error("Evaluation trigger failed:", evalError);
-                // Continue anyway so user can see what IS there
-            }
+            });
 
             toast.dismiss(toastId);
-            toast.success("Session saved!");
+            toast.success("Interview finished! Generating report...");
             navigate(`/voice-interview/results/${data.id}`);
 
         } catch (error: any) {

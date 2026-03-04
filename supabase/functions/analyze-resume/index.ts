@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -15,9 +16,12 @@ Deno.serve(async (req: Request) => {
     try {
         const { resumeUrl, resumeText } = await req.json();
 
-        const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-        if (!GROQ_API_KEY) {
-            throw new Error("GROQ_API_KEY is not configured");
+        const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+        const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+        const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+        if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+            throw new Error("AWS credentials are not configured");
         }
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -41,7 +45,15 @@ Deno.serve(async (req: Request) => {
             throw new Error("Resume content is missing or too short");
         }
 
-        console.log(`Analyzing resume for ${user.email}, length: ${resumeText.length}`);
+        console.log(`Analyzing resume with Bedrock for ${user.email}, length: ${resumeText.length}`);
+
+        const bedrock = new BedrockRuntimeClient({
+            region: AWS_REGION,
+            credentials: {
+                accessKeyId: AWS_ACCESS_KEY_ID,
+                secretAccessKey: AWS_SECRET_ACCESS_KEY,
+            },
+        });
 
         const analysisPrompt = `You are a strict, expert technical recruiter and ATS specialist at a top tech company (FAANG). You are reviewing a candidate's resume for a software engineering role.
 
@@ -93,42 +105,32 @@ ${resumeText}
 
 Provide honest, constructive, and highly specific feedback. Imagine you are deciding whether to interview this person.`;
 
-        const response = await fetch(
-            "https://api.groq.com/openai/v1/chat/completions",
-            {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${GROQ_API_KEY}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    model: "llama-3.3-70b-versatile",
-                    messages: [
-                        { role: "system", content: "You are an expert resume reviewer." },
-                        { role: "user", content: analysisPrompt }
-                    ],
-                    temperature: 0.3,
-                    response_format: { type: "json_object" },
-                }),
+        const command = new ConverseCommand({
+            modelId: "meta.llama3-3-70b-instruct-v1:0",
+            messages: [
+                {
+                    role: "user",
+                    content: [{ text: "Please analyze the following resume text and provide the requested JSON feedback." }]
+                }
+            ],
+            system: [{ text: analysisPrompt }],
+            inferenceConfig: {
+                temperature: 0.3,
+                maxTokens: 4096,
             }
-        );
+        });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Groq API error:", response.status, errorText);
-            throw new Error(`Groq API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        let aiContent = data.choices[0]?.message?.content;
+        const data = await bedrock.send(command);
+        let aiContent = data.output?.message?.content?.[0]?.text;
 
         if (!aiContent) {
             throw new Error("No response from AI");
         }
 
         // Clean up and parse
-        aiContent = aiContent.replace(/```json/g, "").replace(/```/g, "").trim();
-        const analysis = JSON.parse(aiContent);
+        const jsonMatch = aiContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+        const jsonStr = jsonMatch ? jsonMatch[1] : aiContent;
+        const analysis = JSON.parse(jsonStr.trim());
 
         // Save analysis to database
         const { error: insertError } = await supabase

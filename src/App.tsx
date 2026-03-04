@@ -1,58 +1,57 @@
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import AdminDashboard from "./pages/AdminDashboard";
-import Profile from "./pages/Profile";
-import Blogs from "./pages/Blogs";
 import AdminUserDetails from "./pages/AdminUserDetails";
+import Auth from "./pages/Auth";
+import Blogs from "./pages/Blogs";
+import Dashboard from "./pages/Dashboard";
+import Index from "./pages/Index";
+import Profile from "./pages/Profile";
 
-import LearningPaths from "./pages/LearningPaths";
 import InterviewNew from "./pages/InterviewNew";
 import InterviewResults from "./pages/InterviewResults";
 import InterviewSession from "./pages/InterviewSession";
-import VideoInterview from "./pages/VideoInterview";
-import VoiceAssistant from "./pages/VoiceAssistant";
-import VideoInterviewResults from "./pages/VideoInterviewResults";
-import TimedVideoInterviewResults from "./pages/TimedVideoInterviewResults";
-import VoiceInterviewResults from "./pages/VoiceInterviewResults";
+import LearningPaths from "./pages/LearningPaths";
 import MultiQuestionResults from "./pages/MultiQuestionResults";
-import VideoPracticeHistory from "./pages/VideoPracticeHistory";
 import ProgressAnalytics from "./pages/ProgressAnalytics";
+import TimedVideoInterviewResults from "./pages/TimedVideoInterviewResults";
+import VideoInterview from "./pages/VideoInterview";
+import VideoInterviewResults from "./pages/VideoInterviewResults";
+import VideoPracticeHistory from "./pages/VideoPracticeHistory";
+import VoiceAssistant from "./pages/VoiceAssistant";
+import VoiceInterviewResults from "./pages/VoiceInterviewResults";
 
-import AdaptiveInterview from "./pages/AdaptiveInterview";
-import PeerInterviews from "./pages/PeerInterviews";
-import CreatePeerSession from "./pages/CreatePeerSession";
-import PeerSessionRoom from "./pages/PeerSessionRoom";
-import RatePeerSession from "./pages/RatePeerSession";
-import Leaderboard from "./pages/Leaderboard";
-import Blog from "./pages/Blog";
-import BlogPost from "./pages/BlogPost";
-import Community from "./pages/Community";
-import Help from "./pages/Help";
-import Privacy from "./pages/Privacy";
-import DailyChallenge from "./pages/DailyChallenge";
-import DailyChallengeLanding from "./pages/DailyChallengeLanding";
-import JobRecommendations from "./pages/JobRecommendations";
-import QuestionPractice from "./pages/QuestionPractice";
-import Companies from "./pages/Companies";
-import CompanyDetail from "./pages/CompanyDetail";
-import Playground from "./pages/Playground";
-import Pricing from "./pages/Pricing";
-import ElitePrep from "./pages/ElitePrep";
-import NsatPrep from "./pages/NsatPrep";
-import CareerPlanView from "./pages/CareerPlanView";
-import ResumeBuilder from "./pages/ResumeBuilder";
-import NotFound from "./pages/NotFound";
-import { Footer } from "./components/Footer";
 import GlobalAIChatbot from "./components/GlobalAIChatbot";
 import { OnlinePresenceProvider } from "./components/OnlinePresenceProvider";
-import { SessionRequestNotifier } from "./components/SessionRequestNotifier";
 import { ProfileCompletionGuard } from "./components/ProfileCompletionGuard";
+import { SessionRequestNotifier } from "./components/SessionRequestNotifier";
+import AdaptiveInterview from "./pages/AdaptiveInterview";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
+import CareerPlanView from "./pages/CareerPlanView";
+import Community from "./pages/Community";
+import Companies from "./pages/Companies";
+import CompanyDetail from "./pages/CompanyDetail";
+import CreatePeerSession from "./pages/CreatePeerSession";
+import DailyChallenge from "./pages/DailyChallenge";
+import DailyChallengeLanding from "./pages/DailyChallengeLanding";
+import ElitePrep from "./pages/ElitePrep";
+import Help from "./pages/Help";
+import JobRecommendations from "./pages/JobRecommendations";
+import Leaderboard from "./pages/Leaderboard";
+import NotFound from "./pages/NotFound";
+import NsatPrep from "./pages/NsatPrep";
+import PeerInterviews from "./pages/PeerInterviews";
+import PeerSessionRoom from "./pages/PeerSessionRoom";
+import Playground from "./pages/Playground";
+import Pricing from "./pages/Pricing";
+import Privacy from "./pages/Privacy";
+import QuestionPractice from "./pages/QuestionPractice";
+import RatePeerSession from "./pages/RatePeerSession";
+import ResumeBuilder from "./pages/ResumeBuilder";
 
 const queryClient = new QueryClient();
 
@@ -62,7 +61,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <OnlinePresenceProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ProfileCompletionGuard>
             <Routes>
               <Route path="/" element={<Index />} />

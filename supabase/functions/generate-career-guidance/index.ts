@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,11 +15,14 @@ serve(async (req) => {
 
   try {
     const { userId } = await req.json();
-    console.log("Generating career guidance for user:", userId);
+    console.log("Generating career guidance with Bedrock for user:", userId);
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+    const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+    const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+      throw new Error("AWS credentials are not configured");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -59,9 +63,9 @@ serve(async (req) => {
       averageVideoScore:
         videoSessions && videoSessions.length > 0
           ? Math.round(
-              videoSessions.reduce((sum, s) => sum + (s.overall_score || 0), 0) /
-                videoSessions.length
-            )
+            videoSessions.reduce((sum, s) => sum + (s.overall_score || 0), 0) /
+            videoSessions.length
+          )
           : null,
       recentTrends: trends || [],
     };
@@ -108,43 +112,42 @@ Consider:
 
 Be specific, encouraging, and data-driven.`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-          messages: [
-            {
-              role: "user",
-              content: guidancePrompt,
-            },
-          ],
-          temperature: 0.7,
-        }),
+    const bedrock = new BedrockRuntimeClient({
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const command = new ConverseCommand({
+      modelId: "meta.llama3-3-70b-instruct-v1:0",
+      messages: [
+        {
+          role: "user",
+          content: [{ text: guidancePrompt }]
+        }
+      ],
+      system: [{ text: "You are a career counselor and interview preparation expert." }],
+      inferenceConfig: {
+        temperature: 0.7,
+        maxTokens: 4096,
       }
-    );
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+    const data = await bedrock.send(command);
+    const aiResponse = data.output?.message?.content?.[0]?.text;
+
+    if (!aiResponse) {
+      throw new Error("No response from Bedrock");
     }
-
-    const aiData = await response.json();
-    const aiResponse = aiData.choices[0].message.content;
-    console.log("AI Response:", aiResponse);
 
     // Parse AI response
     let guidance;
     try {
       const jsonMatch = aiResponse.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : aiResponse;
-      guidance = JSON.parse(jsonStr);
+      guidance = JSON.parse(jsonStr.trim());
     } catch (parseError) {
       console.error("Failed to parse AI response:", parseError);
       throw new Error("Failed to parse guidance data");
@@ -186,7 +189,7 @@ Be specific, encouraging, and data-driven.`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in generate-career-guidance function:", error);
+    console.error("Error in generate-career-guidance function with Bedrock:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,13 +15,16 @@ serve(async (req) => {
 
   try {
     const { sessionId, question, transcript, userContext, role } = await req.json();
-    console.log("Analyzing video interview session:", sessionId, "Role:", role);
+    console.log("Analyzing video interview session with Bedrock:", sessionId, "Role:", role);
 
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-    if (!GROQ_API_KEY) {
-      console.error("GROQ_API_KEY is not configured");
+    const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+    const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+    const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+      console.error("AWS credentials are not configured");
       return new Response(
-        JSON.stringify({ error: "Server configuration error: GROQ_API_KEY is missing" }),
+        JSON.stringify({ error: "Server configuration error: AWS credentials are missing" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -40,8 +44,6 @@ serve(async (req) => {
       .single();
 
     if (sessionError) throw sessionError;
-
-    console.log("Video URL:", session.video_url);
 
     // Enhanced analysis prompt with role-specific criteria
     const roleContext = role ? `for a ${role} position` : "";
@@ -83,28 +85,11 @@ Provide a comprehensive analysis including:
    Analyze the candidate's personality traits (0-100) based on the comprehensive "6Q Framework":
 
    **1. IQ (Intelligence Quotient)** - Logic & Clarity
-      - High: Structured answer, specific examples
-      - Low: Vague, rambling, misses the point
-
    **2. EQ (Emotional Quotient)** - Empathy & Awareness
-      - High: Uses emotional vocabulary, humble
-      - Low: Defensive, blames others, flat tone
-
    **3. CQ (Creativity Quotient)** - Innovation
-      - High: "What if" thinking, unique perspective
-      - Low: Standard/cliché answers, rigid thinking
-
    **4. AQ (Adversity Quotient)** - Resilience
-      - High: Calm tone, talks about solutions not problems
-      - Low: Frustrated tone, complains, defensive
-
    **5. SQ (Social Quotient)** - Collaboration
-      - High: Inclusive language ("we", "us"), friendly
-      - Low: "I" focused, dismissive, withdrawn
-
    **6. MQ (Moral Quotient)** - Integrity
-      - High: Takes responsibility, honest about mistakes
-      - Low: Avoids blame, inconsistent stories
 
    **DETERMINE THE PERSONALITY CLUSTER based on the top 3 traits:**
    - Balanced Thinker (IQ+EQ+SQ), Innovative Problem Solver (IQ+CQ+AQ), Creative Strategist (IQ+CQ+SQ)
@@ -144,76 +129,47 @@ RESPONSE FORMAT (strict JSON):
 }
 
 Be BRUTALLY HONEST and DIRECT. Users want real feedback, not sugar-coating.
-IF VIDEO METADATA IS MISSING, INFER from the transcript text styles (e.g. long pauses, hesitation words).`;
+IF VIDEO METADATA IS MISSING, INFER from the transcript text styles.`;
 
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            {
-              role: "user",
-              content: analysisPrompt,
-            },
-          ],
-          temperature: 0.3,
-        }),
+    const bedrock = new BedrockRuntimeClient({
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const command = new ConverseCommand({
+      modelId: "meta.llama3-3-70b-instruct-v1:0",
+      messages: [
+        {
+          role: "user",
+          content: [{ text: "Please analyze the following video interview response and provide the requested JSON feedback." }]
+        }
+      ],
+      system: [{ text: analysisPrompt }],
+      inferenceConfig: {
+        temperature: 0.3,
+        maxTokens: 4096,
       }
-    );
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+    const data = await bedrock.send(command);
+    const aiResponse = data.output?.message?.content?.[0]?.text;
+
+    if (!aiResponse) {
+      throw new Error("No response from Bedrock");
     }
-
-    const aiData = await response.json();
-    const aiResponse = aiData.choices[0].message.content;
-    console.log("AI Response:", aiResponse);
 
     // Parse AI response
     let analysis;
     try {
-      // Extract JSON from markdown code blocks if present
       const jsonMatch = aiResponse.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : aiResponse;
-      analysis = JSON.parse(jsonStr);
+      analysis = JSON.parse(jsonStr.trim());
     } catch (parseError) {
       console.error("Failed to parse AI response:", parseError);
-      // Fallback analysis
-      analysis = {
-        delivery_score: 75,
-        body_language_score: 70,
-        confidence_score: 72,
-        overall_score: 72,
-        feedback_summary: aiResponse,
-        strengths: [
-          "Good attempt at answering the question",
-          "Maintained reasonable pace",
-          "Showed enthusiasm",
-        ],
-        improvements: [
-          "Work on reducing filler words",
-          "Maintain better eye contact with camera",
-          "Structure answers using frameworks like STAR",
-        ],
-      };
-    }
-
-    // Calculate overall score if not provided
-    if (!analysis.overall_score) {
-      analysis.overall_score = Math.round(
-        (analysis.delivery_score +
-          analysis.body_language_score +
-          analysis.confidence_score) /
-        3
-      );
+      throw new Error("Failed to parse analysis data");
     }
 
     // Update session with analysis results
@@ -238,8 +194,6 @@ IF VIDEO METADATA IS MISSING, INFER from the transcript text styles (e.g. long p
       .eq("id", sessionId);
 
     if (updateError) throw updateError;
-
-    console.log("Analysis complete for session:", sessionId);
 
     return new Response(JSON.stringify({ success: true, analysis }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

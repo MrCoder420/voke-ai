@@ -24,7 +24,7 @@ export async function loadUserProfileContext(): Promise<ProfileContext> {
             .from('profiles')
             .select('*')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
 
         const userProfile = profile as any;
 
@@ -93,6 +93,12 @@ export async function loadUserProfileContext(): Promise<ProfileContext> {
                         context += `\nGITHUB PROJECTS:\n${projectSummaries.join('\n\n')}\n`;
                         hasGithub = true;
                         console.log('[ProfileContext] ✓ GitHub projects loaded:', projectCount);
+                    } else {
+                        console.warn(`[ProfileContext] GitHub API returned status ${reposResponse.status}: ${reposResponse.statusText}`);
+                        if (reposResponse.status === 401) {
+                            console.error('[ProfileContext] GitHub Token (VITE_GITHUB_TOKEN) is likely invalid or expired.');
+                        }
+                        context += `GitHub Profile: ${userProfile.github_url}\n`;
                     }
                 }
             } catch (e) {

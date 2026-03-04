@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,10 +14,12 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Environment variable validation
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+    const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+    const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+      throw new Error("AWS credentials are not configured");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -58,34 +61,40 @@ serve(async (req: Request) => {
     
     Do not include markdown formatting like \`\`\`json. Just return the raw JSON string.`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `Here are the recent posts:\n${postsText}` },
-          ],
-          stream: false,
-        }),
-      }
-    );
+    const bedrock = new BedrockRuntimeClient({
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    });
 
-    if (!response.ok) {
-      throw new Error(`AI gateway error: ${response.status}`);
+    const command = new ConverseCommand({
+      modelId: "meta.llama3-3-70b-instruct-v1:0",
+      messages: [
+        {
+          role: "user",
+          content: [{ text: `Here are the recent posts:\n${postsText}` }]
+        }
+      ],
+      system: [{ text: systemPrompt }],
+      inferenceConfig: {
+        temperature: 0.7,
+        maxTokens: 4096,
+      }
+    });
+
+    const data = await bedrock.send(command);
+    let aiContent = data.output?.message?.content?.[0]?.text;
+
+    if (!aiContent) {
+      throw new Error("No response from AI");
     }
 
-    const data = await response.json();
-    let content = data.choices?.[0]?.message?.content ?? "{}";
-    
     // Clean up markdown if present
-    content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+    const jsonMatch = aiContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+    const jsonStr = jsonMatch ? jsonMatch[1] : aiContent;
+    const content = jsonStr.trim();
 
     return new Response(
       content,
@@ -97,7 +106,7 @@ serve(async (req: Request) => {
       }
     );
   } catch (error) {
-    console.error("Error in analyze-community-trends function:", error);
+    console.error("Error in analyze-community-trends function with Bedrock:", error);
     return new Response(
       JSON.stringify({ error: (error as Error).message }),
       {

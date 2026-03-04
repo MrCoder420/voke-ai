@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,11 +15,14 @@ serve(async (req) => {
 
   try {
     const { category } = await req.json();
-    console.log("Researching job trends for category:", category);
+    console.log("Researching job trends with Bedrock for category:", category);
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+    const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+    const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
+    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+      throw new Error("AWS credentials are not configured");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -57,36 +61,35 @@ Focus on:
 
 Base your analysis on current 2024-2025 tech market conditions.`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            {
-              role: "user",
-              content: researchPrompt,
-            },
-          ],
-          temperature: 0.7,
-        }),
+    const bedrock = new BedrockRuntimeClient({
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const command = new ConverseCommand({
+      modelId: "meta.llama3-3-70b-instruct-v1:0",
+      messages: [
+        {
+          role: "user",
+          content: [{ text: researchPrompt }]
+        }
+      ],
+      system: [{ text: "You are a career market analyst. Always respond with valid JSON." }],
+      inferenceConfig: {
+        temperature: 0.7,
+        maxTokens: 4096,
       }
-    );
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+    const data = await bedrock.send(command);
+    const aiResponse = data.output?.message?.content?.[0]?.text;
+
+    if (!aiResponse) {
+      throw new Error("No response from AI");
     }
-
-    const aiData = await response.json();
-    const aiResponse = aiData.choices[0].message.content;
-    console.log("AI Response:", aiResponse);
 
     // Parse AI response
     let trendsData;

@@ -17,7 +17,7 @@ Deno.serve(async (req: Request) => {
 
         // Check for standard key first, then the user's custom named key
         const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || Deno.env.get("Groq NEW KEY");
-        
+
         if (!GROQ_API_KEY) {
             console.error("Missing GROQ_API_KEY");
             throw new Error("Server configuration error: Missing API Key");

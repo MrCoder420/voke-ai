@@ -17,13 +17,13 @@ serve(async (req) => {
         const { sessionId } = await req.json();
         console.log("Generating overall feedback for session with Bedrock:", sessionId);
 
-        const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
-        const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-        const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+        const AWS_ACCESS_KEY_ID = Deno.env.get("BEDROCK_AWS_ACCESS_KEY_ID");
+        const AWS_SECRET_ACCESS_KEY = Deno.env.get("BEDROCK_AWS_SECRET_ACCESS_KEY");
+        const AWS_REGION = Deno.env.get("BEDROCK_AWS_REGION") || "us-east-1";
 
         if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
             return new Response(
-                JSON.stringify({ error: "AWS credentials are not configured" }),
+                JSON.stringify({ error: "Bedrock AWS credentials are not configured" }),
                 {
                     status: 400,
                     headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -1,81 +1,57 @@
-# Voke: AI-Powered Career Accelerator 🚀 (AWS Hackathon Edition)
+# Voke - AI-Powered Job Interview & Career Platform
 
-Voke is a comprehensive, AI-driven career development platform designed to empower candidates through personalized interview practice, resume analysis, and career roadmap generation. Built with a focus on **cloud-native scalability and state-of-the-art Generative AI**, Voke leverages the power of **Amazon Web Services (AWS)** to deliver a seamless and intelligent user experience.
+Voke is a modern, AI-driven platform designed to revolutionize interview preparation and career growth. Built with **React**, **Supabase**, and powered by **Amazon Web Services (AWS)**, Voke provides real-time feedback and intelligent career insights.
 
-## 🌟 Key Features
+## 🚀 Key Features
 
--   **Voice-Enabled AI Interviewer**: Engage in natural, real-time technical and behavioral interviews.
--   **Video Analysis & Feedback**: Record your responses and receive "brutally honest" feedback on delivery, body language, and content.
--   **ATS-Optimized Resume Analysis**: Upload your resume for a FAANG-level critique and deep-dive ATS scoring.
--   **Adaptive Career Roadmap**: Receive a personalized 3-month roadmap based on your current skill gaps and market demand.
--   **Real-time Coding Environment**: Solve technical challenges while the AI interviewer provides Socratic guidance.
+- **Voice & Video Interviews**: Conduct realistic mock interviews with real-time AI feedback.
+- **AI Career Guidance**: personalized career paths and goal tracking.
+- **Resume Analysis**: Intelligent parsing and feedback on professional profiles.
+- **Job Trend Research**: Real-time market data analysis for various tech categories.
+- **Coding Playground**: Integrated environment for technical interview preparation.
 
-## 🏗️ AWS Cloud Architecture
+## 🧠 AWS Integration & AI Infrastructure
 
-Voke is built on an AWS-first architecture, utilizing world-class services to handle complex AI workloads and secure data storage.
+Voke leverages high-performance **AWS Cloud Infrastructure** to deliver state-of-the-art AI capabilities.
 
-### 🧠 Amazon Bedrock (The Brain)
-We utilize **Amazon Bedrock** as the primary orchestration layer for our Generative AI features, providing secure access to top-tier foundation models.
--   **Models Used**: `Llama 3.3 70B Instruct`, `Claude 3.5 Sonnet`.
--   **Applications**:
-    -   **Resume Critique**: FAANG-expert analysis of candidate backgrounds.
-    -   **Interview Evaluation**: Comprehensive scoring using the **6Q Personality Framework** (IQ, EQ, CQ, AQ, SQ, MQ).
-    -   **Predictive Market Analysis**: Analyzing job trends to generate adaptive career guidance.
+### Amazon Bedrock
+The core AI engine of Voke is powered by **Amazon Bedrock**, which provides secure access to leading foundation models. We specifically utilize:
 
-### 📁 Amazon S3 (Scalable Storage)
-Security and durability are paramount for candidate data.
--   **Video Interviews**: All recorded sessions are stored securely in **Amazon S3** buckets.
--   **Resume Storage**: PDF and Docx resumes are managed via S3 with granular access controls.
--   **Signed URLs**: We use AWS-style signed URLs to ensure time-limited, secure access to private media files.
+- **Model ID**: `meta.llama3-3-70b-instruct-v1:0` (Llama 3.3 70B)
+- **Use Cases**:
+  - **Interview Evaluation**: Deep analysis of transcripts using the **6Q Personality Framework** (IQ, EQ, CQ, AQ, SQ, MQ).
+  - **Resume Parsing**: High-accuracy data extraction from professional documents.
+  - **Career Mapping**: Strategic generation of career progression steps.
+  - **Job Market Analysis**: Real-time research on industry trends and salary ranges.
 
-### 🛠️ AWS SDK Integration
-Consistent use of the **AWS SDK for JavaScript/Deno** ensures high-performance, low-latency communication between our edge-computed services and AWS infrastructure.
+### AWS SDK Usage
+The project integrates with the AWS ecosystem using the following tools:
+- `@aws-sdk/client-bedrock-runtime`: For low-latency inference and conversation management via Bedrock's Converse API.
+- **Edge Deployment**: AI logic is encapsulated in Supabase Edge Functions, optimized for worldwide performance.
 
-## 🚀 Tech Stack
+## 🛠 Tech Stack
 
--   **Frontend**: React, TypeScript, Vite, Tailwind CSS, Framer Motion.
--   **Backend**: Supabase (Edge Functions, Auth, Database).
--   **AI Infrastructure**: Amazon Bedrock, Groq (Whisper).
--   **Storage**: Amazon S3.
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Shadcn UI, Framer Motion.
+- **Backend/Database**: Supabase (PostgreSQL, Auth, Storage, Edge Functions).
+- **AI/LLM**: Amazon Bedrock, Groq SDK (Voice Transcription/Whisper).
+- **Deployment**: Vercel & Supabase.
 
-## 🛠️ Setup & Installation
+## 📖 Documentation Links
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/EditHive/Voke_AWS.git
-    cd Voke_AWS
-    ```
+- [Video Interview Protocols](./README_VIDEO.md) - Deep dive into video recording and analysis.
+- [Setup Guide](./SETUP_GUIDE.md) - Instructions for local development and environment variables.
+- [Business Model](./BUSINESS_MODEL.md) - Overview of the platform's strategic vision.
+- [Job API Integration](./JOB_API_INTEGRATION.md) - Details on external data sources.
 
-2.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
+## ⚙️ Environment Configuration
 
-3.  **Environment Variables**:
-    Create a `.env` file in the root directory:
-    ```env
-    VITE_GROQ_API_KEY=your_key
-    VITE_GITHUB_TOKEN=your_token
-    # AWS Credentials for Edge Functions
-    AWS_ACCESS_KEY_ID=your_aws_key
-    AWS_SECRET_ACCESS_KEY=your_aws_secret
-    AWS_REGION=us-east-1
-    ```
+To run the project with AWS features, ensure the following keys are set in your environment:
 
-4.  **Run Development Server**:
-    ```bash
-    npm run dev
-    ```
-
-## 📜 6Q Personality Framework
-Voke introduces a unique evaluation metric beyond just code:
--   **IQ (Intelligence)**: Logic and precision.
--   **EQ (Emotional)**: Self-awareness and tone.
--   **CQ (Creativity)**: Innovation and "What if" thinking.
--   **AQ (Adversity)**: Resilience under pressure.
--   **SQ (Social)**: Communication and engagement.
--   **MQ (Moral)**: Integrity and transparency.
+```env
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+```
 
 ---
-
-*Built for the AWS Hackathon 2025.*
+*Voke is optimized for high-performance AI interactions and secure professional data management.*

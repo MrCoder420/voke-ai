@@ -17,14 +17,14 @@ serve(async (req) => {
     const { sessionId, question, transcript, userContext, role } = await req.json();
     console.log("Analyzing video interview session with Bedrock:", sessionId, "Role:", role);
 
-    const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
-    const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-    const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+    const AWS_ACCESS_KEY_ID = Deno.env.get("BEDROCK_AWS_ACCESS_KEY_ID");
+    const AWS_SECRET_ACCESS_KEY = Deno.env.get("BEDROCK_AWS_SECRET_ACCESS_KEY");
+    const AWS_REGION = Deno.env.get("BEDROCK_AWS_REGION") || "us-east-1";
 
     if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-      console.error("AWS credentials are not configured");
+      console.error("Bedrock AWS credentials are not configured");
       return new Response(
-        JSON.stringify({ error: "Server configuration error: AWS credentials are missing" }),
+        JSON.stringify({ error: "Server configuration error: Bedrock AWS credentials are missing" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

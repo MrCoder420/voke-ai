@@ -186,67 +186,55 @@ export function useGroqVoice(props?: UseGroqVoiceProps): UseGroqVoiceReturn {
         speechText = speechText.trim();
 
         try {
-            console.log('DEBUG: Generating speech with Local macOS TTS...');
-            setIsAiSpeaking(true);
-            setVolume(0.8);
+            // Try local TTS ONLY if we are in development
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-            // Call local TTS server
-            const response = await fetch('http://localhost:5001', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ text: speechText }),
-            });
+            if (isLocal) {
+                try {
+                    console.log('DEBUG: Generating speech with Local macOS TTS...');
+                    const response = await fetch('http://localhost:5001', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ text: speechText }),
+                    });
 
-            if (!response.ok) {
-                throw new Error(`TTS Server error: ${response.statusText}`);
-            }
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const audioUrl = URL.createObjectURL(blob);
 
-            const blob = await response.blob();
-            const audioUrl = URL.createObjectURL(blob);
+                        // STOP: Check if we are still connected before playing
+                        if (statusRef.current !== LiveStatus.CONNECTED) {
+                            console.log('DEBUG: Disconnected while generating speech, cancelling playback.');
+                            URL.revokeObjectURL(audioUrl);
+                            return;
+                        }
 
-            // STOP: Check if we are still connected before playing
-            if (statusRef.current !== LiveStatus.CONNECTED) {
-                console.log('DEBUG: Disconnected while generating speech, cancelling playback.');
-                URL.revokeObjectURL(audioUrl);
-                return;
-            }
+                        if (audioRef.current) {
+                            audioRef.current.pause();
+                            audioRef.current = null;
+                        }
+                        const audio = new Audio(audioUrl);
+                        audioRef.current = audio;
 
-            // Play the audio
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-            const audio = new Audio(audioUrl);
-            audioRef.current = audio;
+                        audio.onended = () => {
+                            setIsAiSpeaking(false);
+                            setVolume(0);
+                            URL.revokeObjectURL(audioUrl);
+                            audioRef.current = null;
+                            if (statusRef.current === LiveStatus.CONNECTED && startListeningRef.current) {
+                                setTimeout(() => startListeningRef.current!(), 500);
+                            }
+                        };
 
-            audio.onplay = () => {
-                console.log('DEBUG: Audio started');
-            };
-
-            audio.onended = () => {
-                console.log('DEBUG: Audio finished');
-                setIsAiSpeaking(false);
-                setVolume(0);
-                URL.revokeObjectURL(audioUrl);
-                audioRef.current = null;
-
-                // Resume listening after speaking
-                if (statusRef.current === LiveStatus.CONNECTED && startListeningRef.current) {
-                    setTimeout(() => startListeningRef.current!(), 500);
+                        await audio.play();
+                        return; // Successfully used local TTS
+                    }
+                } catch (localError) {
+                    console.log('DEBUG: Local TTS server not available, using fallback.');
                 }
-            };
-
-            audio.onerror = (e) => {
-                console.error("DEBUG: Audio playback error:", e);
-                setIsAiSpeaking(false);
-                setVolume(0);
-                audioRef.current = null;
-            };
-
-            console.log('DEBUG: Playing audio for:', speechText);
-            await audio.play();
+            }
 
         } catch (error) {
             console.error('DEBUG: Local TTS error:', error);

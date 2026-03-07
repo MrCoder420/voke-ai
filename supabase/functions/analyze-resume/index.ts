@@ -21,7 +21,8 @@ Deno.serve(async (req: Request) => {
         const AWS_REGION = Deno.env.get("BEDROCK_AWS_REGION") || "us-east-1";
 
         if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-            throw new Error("Bedrock AWS credentials are not configured");
+            console.error("CRITICAL: Bedrock AWS credentials missing in Supabase");
+            throw new Error("Bedrock AWS credentials (BEDROCK_AWS_ACCESS_KEY_ID, BEDROCK_AWS_SECRET_ACCESS_KEY) are not configured in Supabase. Please set them using 'supabase secrets set'.");
         }
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

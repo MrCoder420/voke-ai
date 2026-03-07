@@ -1,22 +1,26 @@
-import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  MessageSquare,
-  Send, User, Bot, Mic, MicOff, LogOut,
-  Settings, Menu, X
-} from "lucide-react";
-import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { motion, AnimatePresence } from "motion/react";
-import ReactMarkdown from "react-markdown";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { useVoiceChat } from "@/hooks/useVoiceChat";
+import { supabase } from "@/integrations/supabase/client";
 import { loadUserProfileContext, ProfileContext } from "@/utils/profileContext";
+import {
+  LogOut,
+  Menu,
+  MessageSquare,
+  Mic,
+  Send,
+  Settings,
+  User,
+  X
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 // Interview Categories
 const CATEGORIES = [
@@ -376,7 +380,7 @@ ${data.feedback.verification_note ? `### 🔍 Verification Note\n${data.feedback
               >
                 {message.role === "assistant" && (
                   <Avatar className="w-8 h-8 mt-1 border border-border shadow-sm">
-                    <AvatarImage src="/ai-avatar.png" />
+                    <AvatarImage src="/ai-avatar-video.png" />
                     <AvatarFallback className="bg-gradient-to-br from-violet-600 to-purple-600 text-white">AI</AvatarFallback>
                   </Avatar>
                 )}

@@ -27,11 +27,13 @@ Deno.serve(async (req: Request) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-      throw new Error("Bedrock AWS credentials are not configured");
+      console.error("CRITICAL: Bedrock AWS credentials missing in Supabase secrets");
+      throw new Error("Bedrock AWS credentials (BEDROCK_AWS_ACCESS_KEY_ID, BEDROCK_AWS_SECRET_ACCESS_KEY) are not configured in Supabase.");
     }
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Supabase credentials are not configured");
+      console.error("CRITICAL: Supabase internal credentials missing");
+      throw new Error("Supabase credentials are not configured correctly in the environment.");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);

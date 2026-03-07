@@ -26,13 +26,13 @@ serve(async (req) => {
       );
     }
 
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || Deno.env.get("VITE_GROQ_API_KEY");
     console.log("DEBUG: GROQ_API_KEY present:", !!GROQ_API_KEY);
     console.log("DEBUG: GROQ_API_KEY length:", GROQ_API_KEY ? GROQ_API_KEY.length : 0);
 
     if (!GROQ_API_KEY) {
-      console.error("CRITICAL: GROQ_API_KEY is missing from environment variables");
-      throw new Error("GROQ_API_KEY is not configured");
+      console.error("CRITICAL: GROQ_API_KEY is missing from Supabase environment variables");
+      throw new Error("GROQ_API_KEY is not configured in Supabase. Please run: supabase secrets set GROQ_API_KEY=your_key");
     }
 
     // Check if interview should end

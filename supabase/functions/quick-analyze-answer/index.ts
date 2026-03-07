@@ -16,7 +16,7 @@ serve(async (req) => {
         const { answerId, question, transcript, role } = await req.json();
         console.log("Quick analyzing answer:", answerId);
 
-        const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+        const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || Deno.env.get("VITE_GROQ_API_KEY");
         if (!GROQ_API_KEY) {
             return new Response(
                 JSON.stringify({ error: "GROQ_API_KEY is not configured" }),

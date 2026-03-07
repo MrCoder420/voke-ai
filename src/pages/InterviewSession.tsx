@@ -1,29 +1,28 @@
-import { useEffect, useState, useRef } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { loadUserProfileContext } from "@/utils/profileContext";
 import {
+  AlertTriangle,
+  Award,
+  Bot,
+  CheckCircle2,
+  Clock,
   LogOut,
   Send,
-  Clock,
-  User,
-  Bot,
   StopCircle,
-  Award,
-  CheckCircle2,
-  AlertTriangle,
+  User,
 } from "lucide-react";
-import { toast } from "sonner";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { motion, AnimatePresence } from "motion/react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
-import { loadUserProfileContext } from "@/utils/profileContext";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 // Basic message shape for the text interview
 interface Message {
@@ -280,9 +279,9 @@ Tell me about a time you had to learn something quickly in order to deliver on a
         {/* Mobile Header */}
         <header className="md:hidden border-b border-border/40 bg-background/80 backdrop-blur-md p-4 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
-            <img 
-              src="/images/voke_logo.png" 
-              alt="Voke Logo" 
+            <img
+              src="/images/voke_logo.png"
+              alt="Voke Logo"
               className="w-8 h-8 object-contain"
             />
             <span className="font-bold">Voke AI</span>
@@ -306,7 +305,7 @@ Tell me about a time you had to learn something quickly in order to deliver on a
                 >
                   {message.role === "assistant" && (
                     <Avatar className="w-10 h-10 border border-border mt-1 shrink-0 shadow-sm">
-                      <AvatarImage src="/ai-avatar.png" />
+                      <AvatarImage src="/ai-avatar-video.png" />
                       <AvatarFallback className="bg-gradient-to-br from-violet-600 to-purple-600 text-white">AI</AvatarFallback>
                     </Avatar>
                   )}

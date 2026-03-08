@@ -42,6 +42,7 @@ const VoiceAssistant: React.FC = () => {
 
     const [feedback, setFeedback] = useState<string | null>(null);
     const [duration, setDuration] = useState(0);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Live Context Sync (Debounced 2s)
     useEffect(() => {
@@ -195,6 +196,7 @@ const VoiceAssistant: React.FC = () => {
                     }
                 }
 
+
                 context += `\nINSTRUCTION: You are conducting a technical interview. Start with introductions and behavioral questions. When you feel ready to test their coding skills, say "[START_CODING]" and present a problem.`;
                 setUserContext(context);
             }
@@ -214,12 +216,14 @@ const VoiceAssistant: React.FC = () => {
         }
 
         disconnect();
-        const toastId = toast.loading("Saving session...");
+        setIsAnalyzing(true);
+        const toastId = toast.loading("Analyzing your interview... Please wait.");
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("User not authenticated");
 
+            console.log("[VoiceAssistant] Saving session transcript...");
             const { data, error } = await supabase
                 .from('interview_sessions')
                 .insert({
@@ -228,7 +232,7 @@ const VoiceAssistant: React.FC = () => {
                     time_limit_minutes: 0,
                     status: 'completed',
                     interview_type: 'voice',
-                    interview_mode: 'voice', // could update to 'mixed' if coding happened
+                    interview_mode: 'voice',
                     transcript: logs,
                     total_duration_seconds: duration,
                     created_at: new Date().toISOString()
@@ -238,21 +242,46 @@ const VoiceAssistant: React.FC = () => {
 
             if (error) throw error;
 
-            // Trigger analysis (NON-BLOCKING)
-            supabase.functions.invoke('evaluate-interview', {
+            // Trigger analysis (BLOCKING for better UX and guaranteed sync)
+            console.log(`[VoiceAssistant] Starting AI analysis for session: ${data.id}`);
+
+            const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-interview', {
                 body: { session_id: data.id }
-            }).catch(evalError => {
-                console.error("Evaluation trigger failed:", evalError);
             });
 
-            toast.dismiss(toastId);
-            toast.success("Interview finished! Generating report...");
-            navigate(`/voice-interview/results/${data.id}`);
+            if (evalError) {
+                console.error("[VoiceAssistant] Evaluation failed:", evalError);
+                toast.error("Analysis complete, but some results might be delayed.", { id: toastId });
+                navigate(`/voice-interview/results/${data.id}`);
+            } else {
+                console.log("[VoiceAssistant] Analysis received:", evalData);
+                toast.success("Analysis complete!", { id: toastId });
+
+                // Pass evaluation in state to the results page for instant display
+                navigate(`/voice-interview/results/${data.id}`, {
+                    state: {
+                        initialSession: {
+                            ...data,
+                            overall_score: evalData.evaluation?.score,
+                            feedback_summary: evalData.evaluation?.feedback,
+                            whats_good: evalData.evaluation?.strengths,
+                            whats_wrong: evalData.evaluation?.weaknesses,
+                            delivery_score: evalData.evaluation?.metrics?.communication,
+                            confidence_score: evalData.evaluation?.metrics?.technical_accuracy,
+                            six_q_score: evalData.evaluation?.six_q_score,
+                            personality_cluster: evalData.evaluation?.personality_cluster,
+                            status: 'completed'
+                        }
+                    }
+                });
+            }
 
         } catch (error: any) {
-            console.error("Error saving session:", error);
+            console.error("Error in end interview flow:", error);
             toast.dismiss(toastId);
-            toast.error(`Failed to save session: ${error.message}`);
+            toast.error(`Error: ${error.message}`);
+        } finally {
+            setIsAnalyzing(false);
         }
     };
 

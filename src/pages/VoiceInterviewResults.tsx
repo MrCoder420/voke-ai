@@ -6,17 +6,28 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertCircle, ArrowLeft, Award, CheckCircle2, LogOut, MessageSquare, Mic, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 const VoiceInterviewResults = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<any>(null);
+  const location = useLocation();
+  const [loading, setLoading] = useState(!location.state?.initialSession);
+  const [session, setSession] = useState<any>(location.state?.initialSession || null);
 
   useEffect(() => {
     checkAuth();
-    loadResults();
+    if (!session) {
+      loadResults();
+    }
+
+    // POLLLING FALLBACK: Check every 5s if still no results
+    const pollInterval = setInterval(() => {
+      if (!session || session.overall_score === null) {
+        console.log('[Polling] Checking for results...');
+        loadResults();
+      }
+    }, 5000);
 
     // Subscribe to realtime updates for this session
     const channel = supabase
@@ -30,16 +41,24 @@ const VoiceInterviewResults = () => {
           filter: `id=eq.${id}`
         },
         (payload) => {
-          console.log('Realtime update received:', payload);
-          setSession(payload.new);
+          console.log('[Realtime] Update received for session:', payload);
+          if (payload.new) {
+            console.log('[Realtime] New session state:', payload.new);
+            setSession(payload.new);
+            // Clear interval if we got realtime update
+            clearInterval(pollInterval);
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Realtime] Subscription status for session ${id}:`, status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
-  }, [id]);
+  }, [id, !!session]); // Only re-run if id changes or session is null/populated status
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -92,9 +111,19 @@ const VoiceInterviewResults = () => {
             {session ? "Generating your detailed report..." : "Analyzing your conversation..."}
           </p>
           {session && (
-            <p className="text-sm text-muted-foreground/60 max-w-xs text-center">
-              Our AI is reviewing your transcript to provide evidence-based feedback. This usually takes 10-15 seconds.
-            </p>
+            <div className="flex flex-col items-center gap-4">
+              <p className="text-sm text-muted-foreground/60 max-w-xs text-center">
+                Our AI is reviewing your transcript to provide evidence-based feedback.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadResults}
+                className="mt-4 opacity-50 hover:opacity-100 transition-opacity"
+              >
+                Refresh Data
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -207,8 +236,8 @@ const VoiceInterviewResults = () => {
                   session.transcript.map((msg: any, idx: number) => (
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${msg.role === 'user'
-                          ? 'bg-primary/20 text-primary-foreground rounded-tr-sm'
-                          : 'bg-muted/50 text-muted-foreground rounded-tl-sm'
+                        ? 'bg-primary/20 text-primary-foreground rounded-tr-sm'
+                        : 'bg-muted/50 text-muted-foreground rounded-tl-sm'
                         }`}>
                         {msg.text}
                       </div>

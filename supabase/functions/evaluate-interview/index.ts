@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { BedrockRuntimeClient, ConverseCommand } from "npm:@aws-sdk/client-bedrock-runtime";
 import { createClient } from "npm:@supabase/supabase-js";
 
 const corsHeaders = {
@@ -20,25 +19,24 @@ Deno.serve(async (req: Request) => {
       throw new Error("session_id is required");
     }
 
-    const AWS_ACCESS_KEY_ID = Deno.env.get("BEDROCK_AWS_ACCESS_KEY_ID");
-    const AWS_SECRET_ACCESS_KEY = Deno.env.get("BEDROCK_AWS_SECRET_ACCESS_KEY");
-    const AWS_REGION = Deno.env.get("BEDROCK_AWS_REGION") || "us-east-1";
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-      console.error("CRITICAL: Bedrock AWS credentials missing in Supabase secrets");
-      throw new Error("Bedrock AWS credentials (BEDROCK_AWS_ACCESS_KEY_ID, BEDROCK_AWS_SECRET_ACCESS_KEY) are not configured in Supabase.");
+    if (!GROQ_API_KEY) {
+      console.error("CRITICAL: GROQ_API_KEY missing in Supabase secrets");
+      throw new Error("Groq API key is not configured in Supabase.");
     }
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error("CRITICAL: Supabase internal credentials missing");
-      throw new Error("Supabase credentials are not configured correctly in the environment.");
+      throw new Error("Supabase credentials are not configured correctly.");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch session data
+    // 1. Fetch session data
+    console.log(`DEBUG: Fetching session data for ID: ${session_id}`);
     const { data: session, error: sessionError } = await supabase
       .from('interview_sessions')
       .select('*')
@@ -46,11 +44,17 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (sessionError || !session) {
+      console.error(`DEBUG: Failed to fetch session: ${sessionError?.message}`);
       throw new Error(`Failed to fetch session: ${sessionError?.message || 'Not found'}`);
     }
 
     const transcript = session.transcript || [];
     const interview_type = session.interview_type || 'voice';
+    console.log(`DEBUG: Session found. Transcript length: ${transcript.length}, Type: ${interview_type}`);
+
+    if (transcript.length === 0) {
+      throw new Error("No transcript found for this session.");
+    }
 
     const systemPrompt = `You are an expert technical interviewer and behavioral analyst. Your task is to evaluate a candidate's performance in a ${interview_type} interview based on the provided transcript.
     
@@ -58,30 +62,21 @@ Deno.serve(async (req: Request) => {
     
     **MANDATORY INSTRUCTION: USE QUOTES.**
     When providing feedback, strengths, or weaknesses, you MUST quote the candidate's exact words (or close paraphrase) to support your claim.
-    - *Bad Feedback:* "You have good communication skills."
-    - *Good Feedback:* "You demonstrated excellent communication when you said 'I would break this down into three parts', showing clear structural thinking."
 
     - **AVOID GENERIC SCORES:** Do not just give everyone 70-80. Use the full range (0-100) based on merit.
     - **DETECT NUANCE:** A short answer can still demonstrate high IQ if it's precise. A long rambling answer might indicate low CQ (lack of focus).
-    - **CONTEXT MATTERS:** This is a ${interview_type} interview. Informal spoken grammar is acceptable, but technical accuracy and clarity are paramount.
+    - **CONTEXT MATTERS:** This is a ${interview_type} interview.
 
     **STEP 1: SANITY CHECK (Pass/Fail)**
     - FAIL if the user is trolling, spamming keys ("asdf"), or refusing to participate.
-    - FAIL if the user provides consistently irrelevant answers (e.g., answering "I like pizza" to a coding question).
     - **IF FAIL:** Return score: 0, and feedback: "Interview attempt invalid due to irrelevant or non-serious responses."
 
     **STEP 2: 6Q PERSONALITY FRAMEWORK (Scoring 0-100)**
-    Analyze the candidate's specific word choices, tone indicators (if transcribed), and problem-solving approach.
-    
-    **1. IQ (Intelligence Quotient)** - Logic, Depth, Precision.
-    **2. EQ (Emotional Quotient)** - Self-Awareness, Tone, Empathy.
-    **3. CQ (Creativity Quotient)** - Innovation, "What If" Thinking.
-    **4. AQ (Adversity Quotient)** - Resilience, Handling Complexity.
-    **5. SQ (Social Quotient)** - Communication, Engagement.
-    **6. MQ (Moral/Ethical Quotient)** - Integrity, Transparency.
+    Analyze the candidate's specific word choices and problem-solving approach.
+    IQ, EQ, CQ, AQ, SQ, MQ.
 
     **STEP 3: CLUSTER ASSIGNMENT**
-    Based on the top 3 highest scores, assign a descriptive persona cluster name.
+    Assign a descriptive persona cluster name based on the scores.
 
     **OUTPUT SCHEMA (JSON Only):**
     {
@@ -100,79 +95,49 @@ Deno.serve(async (req: Request) => {
       "personality_cluster": "Cluster Name"
     }`;
 
-    // Format transcript for Bedrock (MUST start with 'user' and alternate roles)
-    const sanitizedMessages: any[] = [];
-    let lastRole: string | null = null;
+    // 2. Format transcript for Groq
+    const groqMessages = [
+      { role: "system", content: systemPrompt },
+      ...transcript.map((m: any) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.text || ""
+      }))
+    ];
 
-    // Convert transcript to Bedrock format first
-    const rawMessages = (transcript || []).map((m: any) => ({
-      role: m.role || 'user',
-      content: [{ text: m.text || "" }]
-    }));
-
-    for (const msg of rawMessages) {
-      if (msg.role === lastRole) {
-        // Merge consecutive messages from the same role
-        const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
-        lastMsg.content[0].text += "\n" + msg.content[0].text;
-      } else {
-        // Only if it's the first message, it MUST be 'user'
-        if (sanitizedMessages.length === 0 && msg.role === 'assistant') {
-          // Skip or convert first assistant msg if it comes first
-          sanitizedMessages.push({
-            role: 'user',
-            content: [{ text: "Starting interview." }]
-          });
-        }
-        sanitizedMessages.push(msg);
-        lastRole = msg.role;
-      }
-    }
-
-    // Final check: Must have at least one message and MUST NOT end with 'assistant' (Bedrock often allows ending with assistant, but Converse API is picky)
-    if (sanitizedMessages.length === 0) {
-      sanitizedMessages.push({ role: 'user', content: [{ text: "No conversation recorded." }] });
-    }
-
-    const bedrock = new BedrockRuntimeClient({
-      region: AWS_REGION,
-      credentials: {
-        accessKeyId: AWS_ACCESS_KEY_ID,
-        secretAccessKey: AWS_SECRET_ACCESS_KEY,
-      },
-    });
-
-    console.log(`DEBUG: Sending ${sanitizedMessages.length} messages to Bedrock (Llama 3.1 8B)...`);
-
-    const command = new ConverseCommand({
-      modelId: "meta.llama3-1-8b-instruct-v1:0",
-      messages: sanitizedMessages,
-      system: [{ text: systemPrompt }],
-      inferenceConfig: {
-        temperature: 0.3,
-        maxTokens: 2048,
-      }
-    });
-
+    // 3. Call Groq API
+    console.log("DEBUG: Calling Groq API (llama-3.3-70b-versatile)...");
     const startTime = Date.now();
-    const data = await bedrock.send(command).catch(e => {
-      console.error("CRITICAL Bedrock Send Error:", e);
-      throw e;
+
+    const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: groqMessages,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      }),
     });
 
-    console.log(`DEBUG: Bedrock responded in ${Date.now() - startTime}ms`);
-    const aiContent = data.output?.message?.content?.[0]?.text;
-
-    if (!aiContent) {
-      throw new Error("No response from Bedrock");
+    if (!groqResponse.ok) {
+      const errorText = await groqResponse.text();
+      console.error(`DEBUG: Groq API Error (${groqResponse.status}):`, errorText);
+      throw new Error(`Groq API error: ${groqResponse.status}`);
     }
 
-    // Clean up potential markdown formatting
-    const jsonMatch = aiContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-    const jsonStr = jsonMatch ? jsonMatch[1] : aiContent;
-    const evaluation = JSON.parse(jsonStr.trim());
+    const groqData = await groqResponse.json();
+    console.log(`DEBUG: Groq responded in ${Date.now() - startTime}ms`);
 
-    // Update database
+    let aiContent = groqData.choices[0]?.message?.content;
+    if (!aiContent) {
+      throw new Error("No content received from Groq");
+    }
+
+    // 4. Update Database
+    console.log("DEBUG: Updating interview session with results...");
     const { error: updateError } = await supabase
       .from('interview_sessions')
       .update({
@@ -189,8 +154,11 @@ Deno.serve(async (req: Request) => {
       .eq('id', session_id);
 
     if (updateError) {
-      console.error("Database update error:", updateError);
+      console.error("CRITICAL: Database update failed:", updateError);
+      throw new Error(`Failed to save evaluation to database: ${updateError.message}`);
     }
+
+    console.log("DEBUG: Database update successful.");
 
     return new Response(JSON.stringify({ success: true, evaluation }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -147,8 +147,6 @@ Deno.serve(async (req: Request) => {
         feedback_summary: evaluation.feedback,
         whats_good: evaluation.strengths,
         whats_wrong: evaluation.weaknesses,
-        delivery_score: evaluation.metrics.communication,
-        confidence_score: evaluation.metrics.technical_accuracy,
         six_q_score: evaluation.six_q_score,
         personality_cluster: evaluation.personality_cluster,
         status: 'completed'

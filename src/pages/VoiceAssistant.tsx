@@ -246,7 +246,10 @@ const VoiceAssistant: React.FC = () => {
             console.log(`[VoiceAssistant] Starting AI analysis for session: ${data.id}`);
 
             const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-interview', {
-                body: { session_id: data.id }
+                body: { 
+                    messages: logs,
+                    interview_type: 'voice' 
+                }
             });
 
             if (evalError) {
